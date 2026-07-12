@@ -33,7 +33,7 @@ export default function Directory() {
 
   // Driver form
   const [driverForm, setDriverForm] = useState({
-    name: '', licenseNumber: '', licenseCategory: 'Class A',
+    name: '', email: '', licenseNumber: '', licenseCategory: 'Class A',
     licenseExpiry: '', contactNumber: '', safetyScore: 90
   });
 
@@ -122,7 +122,7 @@ export default function Directory() {
 
       setShowAddDriver(false);
       setEditingDriverId(null);
-      setDriverForm({ name: '', licenseNumber: '', licenseCategory: 'Class A', licenseExpiry: '', contactNumber: '', safetyScore: 90 });
+      setDriverForm({ name: '', email: '', licenseNumber: '', licenseCategory: 'Class A', licenseExpiry: '', contactNumber: '', safetyScore: 90 });
       fetchData();
     } catch (err) {
       setFormError(err.fieldErrors ? Object.values(err.fieldErrors).join(', ') : err.message);
@@ -134,6 +134,7 @@ export default function Directory() {
   const openEditDriver = (d) => {
     setDriverForm({
       name: d.name || '',
+      email: d.email || '',
       licenseNumber: d.licenseNumber || '',
       licenseCategory: d.licenseCategory || 'Class A',
       licenseExpiry: d.licenseExpiry || '',
@@ -190,7 +191,7 @@ export default function Directory() {
           <button className="btn btn-outline" onClick={() => { setShowAddVehicle(true); setEditingVehicleId(null); setVehicleForm({ registrationNumber: '', modelName: '', type: 'Cargo Van', maxLoadCapacity: '', odometer: '', acquisitionCost: '' }); setFormError(null); }}>
             <Car size={16} /> ADD VEHICLE
           </button>
-          <button className="btn btn-primary" onClick={() => { setShowAddDriver(true); setEditingDriverId(null); setDriverForm({ name: '', licenseNumber: '', licenseCategory: 'Class A', licenseExpiry: '', contactNumber: '', safetyScore: 90 }); setFormError(null); }}>
+          <button className="btn btn-primary" onClick={() => { setShowAddDriver(true); setEditingDriverId(null); setDriverForm({ name: '', email: '', licenseNumber: '', licenseCategory: 'Class A', licenseExpiry: '', contactNumber: '', safetyScore: 90 }); setFormError(null); }}>
             <UserPlus size={16} /> ADD DRIVER
           </button>
         </div>
@@ -244,7 +245,7 @@ export default function Directory() {
             <thead>
               <tr>
                 <th>ID</th>
-                <th>NAME</th>
+                <th>NAME / EMAIL</th>
                 <th>LICENSE</th>
                 <th>CONTACT</th>
                 <th>SAFETY SCORE</th>
@@ -270,7 +271,10 @@ export default function Directory() {
                         <User size={16} className="id-icon" /> DVR-{String(d.id).padStart(2, '0')}
                       </div>
                     </td>
-                    <td>{d.name}</td>
+                    <td>
+                      <div>{d.name}</div>
+                      <div className="cell-muted" style={{ fontSize: '11px' }}>{d.email || '--'}</div>
+                    </td>
                     <td>{d.licenseCategory} ({d.licenseNumber})</td>
                     <td className="cell-muted">{d.contactNumber || '--'}</td>
                     <td>
@@ -443,9 +447,15 @@ export default function Directory() {
             </div>
             {formError && <div style={{ padding: '8px 24px', color: '#DC2626', fontSize: 13 }}>{formError}</div>}
             <form onSubmit={handleAddDriver} className="modal-form">
-              <div className="form-group">
-                <label>Full Name</label>
-                <input type="text" placeholder="e.g. John Doe" value={driverForm.name} onChange={e => setDriverForm({...driverForm, name: e.target.value})} required />
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Full Name</label>
+                  <input type="text" placeholder="e.g. John Doe" value={driverForm.name} onChange={e => setDriverForm({...driverForm, name: e.target.value})} required />
+                </div>
+                <div className="form-group">
+                  <label>Email Address</label>
+                  <input type="email" placeholder="e.g. john@transitops.com" value={driverForm.email} onChange={e => setDriverForm({...driverForm, email: e.target.value})} required />
+                </div>
               </div>
               <div className="form-row">
                 <div className="form-group">
@@ -467,8 +477,8 @@ export default function Directory() {
                   <input type="date" value={driverForm.licenseExpiry} onChange={e => setDriverForm({...driverForm, licenseExpiry: e.target.value})} required />
                 </div>
                 <div className="form-group">
-                  <label>Contact Number</label>
-                  <input type="text" placeholder="+15550199" value={driverForm.contactNumber} onChange={e => setDriverForm({...driverForm, contactNumber: e.target.value})} />
+                  <label>Contact Number (e.g. +1234567890)</label>
+                  <input type="tel" pattern="^\+?[0-9]{10,15}$" placeholder="+1555019900" value={driverForm.contactNumber} onChange={e => setDriverForm({...driverForm, contactNumber: e.target.value})} required />
                 </div>
               </div>
               <div className="form-group">
