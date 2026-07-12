@@ -1,139 +1,458 @@
-import React from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
-import { Fuel, Navigation, PenTool as Tool, TrendingUp } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import {
+  History, Filter, Loader2, AlertCircle, CheckCircle, XCircle, Send,
+  Truck, User, Package, MapPin, Clock, ChevronLeft, ChevronRight,
+  Fuel, Plus, X
+} from 'lucide-react';
+import { tripsApi, fuelApi, expensesApi } from '../services/api';
 import './TripLogs.css';
 
-// Fix for default Leaflet markers in React
-import icon from 'leaflet/dist/images/marker-icon.png';
-import iconShadow from 'leaflet/dist/images/marker-shadow.png';
-let DefaultIcon = L.icon({
-    iconUrl: icon,
-    shadowUrl: iconShadow,
-    iconAnchor: [12, 41]
-});
-L.Marker.prototype.options.icon = DefaultIcon;
-
 export default function TripLogs() {
-  const mumbaiCenter = [19.0176, 72.8561]; // Dadar roughly center
-  const routePositions = [
-    [19.1136, 72.8697], // Andheri
-    [19.0176, 72.8561], // Dadar
-    [18.9067, 72.8147]  // Colaba
-  ];
+  const [trips, setTrips] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [actionLoading, setActionLoading] = useState(null);
 
-  const recentLogs = [
-    { type: 'Fuel', place: 'HP Petrol Pump', date: 'Oct 24, 09:15 AM', amount: '-$150.00', icon: Fuel },
-    { type: 'Toll', place: 'BWSL Toll', date: 'Oct 24, 11:30 AM', amount: '-$5.20', icon: Navigation },
-    { type: 'Tire Patch', place: 'Local Garage', date: 'Oct 23, 16:45 PM', amount: '-$35.00', icon: Tool }
-  ];
+  // Complete trip modal
+  const [showCompleteModal, setShowCompleteModal] = useState(null);
+  const [actualDistance, setActualDistance] = useState('');
+
+  // Fuel/Expense logging modal
+  const [showExpenseModal, setShowExpenseModal] = useState(null);
+  const [expenseForm, setExpenseForm] = useState({
+    type: 'FUEL',
+    liters: '',
+    cost: '',
+    odometer: '',
+    amount: '',
+    description: '',
+    date: new Date().toISOString().split('T')[0]
+  });
+  const [expenseLoading, setExpenseLoading] = useState(false);
+  const [expenseError, setExpenseError] = useState(null);
+
+  useEffect(() => {
+    fetchTrips();
+  }, []);
+
+  const fetchTrips = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await tripsApi.getAll();
+      setTrips(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredTrips = statusFilter === 'ALL'
+    ? trips
+    : trips.filter(t => t.status === statusFilter);
+
+  const statusCounts = {
+    ALL: trips.length,
+    DRAFT: trips.filter(t => t.status === 'DRAFT').length,
+    DISPATCHED: trips.filter(t => t.status === 'DISPATCHED').length,
+    COMPLETED: trips.filter(t => t.status === 'COMPLETED').length,
+    CANCELLED: trips.filter(t => t.status === 'CANCELLED').length
+  };
+
+  const handleDispatch = async (id) => {
+    setActionLoading(id);
+    try {
+      await tripsApi.dispatch(id);
+      fetchTrips();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleComplete = async () => {
+    if (!showCompleteModal) return;
+    setActionLoading(showCompleteModal);
+    try {
+      await tripsApi.complete(showCompleteModal, parseFloat(actualDistance) || undefined);
+      setShowCompleteModal(null);
+      setActualDistance('');
+      fetchTrips();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleCancel = async (id) => {
+    setActionLoading(id);
+    try {
+      await tripsApi.cancel(id);
+      fetchTrips();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleLogExpense = async (e) => {
+    e.preventDefault();
+    if (!showExpenseModal) return;
+    setExpenseLoading(true);
+    setExpenseError(null);
+
+    const trip = trips.find(t => t.id === showExpenseModal);
+    if (!trip) return;
+
+    try {
+      if (expenseForm.type === 'FUEL') {
+        await fuelApi.create({
+          vehicleId: trip.vehicleId,
+          tripId: trip.id,
+          liters: parseFloat(expenseForm.liters) || 0,
+          cost: parseFloat(expenseForm.cost) || 0,
+          odometer: parseFloat(expenseForm.odometer) || 0,
+          fuelDate: expenseForm.date
+        });
+      } else {
+        await expensesApi.create({
+          vehicleId: trip.vehicleId,
+          expenseType: expenseForm.type,
+          amount: parseFloat(expenseForm.amount) || 0,
+          description: expenseForm.description,
+          expenseDate: expenseForm.date
+        });
+      }
+      setShowExpenseModal(null);
+      setExpenseForm({ type: 'FUEL', liters: '', cost: '', odometer: '', amount: '', description: '', date: new Date().toISOString().split('T')[0] });
+    } catch (err) {
+      setExpenseError(err.fieldErrors ? Object.values(err.fieldErrors).join(', ') : err.message);
+    } finally {
+      setExpenseLoading(false);
+    }
+  };
+
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case 'DRAFT':
+        return <span className="tl-badge tl-badge-draft"><Clock size={12} /> Draft</span>;
+      case 'DISPATCHED':
+        return <span className="tl-badge tl-badge-dispatched"><Send size={12} /> In Transit</span>;
+      case 'COMPLETED':
+        return <span className="tl-badge tl-badge-completed"><CheckCircle size={12} /> Completed</span>;
+      case 'CANCELLED':
+        return <span className="tl-badge tl-badge-cancelled"><XCircle size={12} /> Cancelled</span>;
+      default:
+        return <span className="tl-badge">{status}</span>;
+    }
+  };
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '--';
+    return new Date(dateStr).toLocaleDateString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+  };
 
   return (
     <div className="triplogs-page">
-      <div className="trip-header-section">
+      <div className="tl-header">
         <div>
-          <h1>Trip #TR-1024</h1>
-          <p>Andheri, Mumbai → Colaba, Mumbai</p>
-        </div>
-        <div className="trip-actions">
-          <span className="status-badge status-in-progress">
-            <span className="dot"></span> In Progress
-          </span>
-          <button className="btn btn-blue">Complete Trip</button>
+          <h1>Trip Logs</h1>
+          <p>Complete history of all fleet trips and their lifecycle status.</p>
         </div>
       </div>
 
-      <div className="triplogs-grid">
-        <div className="map-section">
-          <div className="map-header">
-            <span className="map-title">Live Tracking</span>
-            <span className="map-eta">ETA: 14:30 IST</span>
-          </div>
-          <div className="map-container">
-            <MapContainer center={mumbaiCenter} zoom={11} style={{ height: '100%', width: '100%' }}>
-              <TileLayer
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                attribution='&copy; OpenStreetMap contributors'
-              />
-              <Polyline positions={routePositions} color="#1E40AF" weight={4} dashArray="10, 10" />
-              <Marker position={routePositions[0]}>
-                <Popup>Andheri (Pickup)</Popup>
-              </Marker>
-              <Marker position={routePositions[1]}>
-                <Popup>Dadar (Midpoint)</Popup>
-              </Marker>
-              <Marker position={routePositions[2]}>
-                <Popup>Colaba (Drop-off)</Popup>
-              </Marker>
-            </MapContainer>
-          </div>
+      {error && (
+        <div className="tl-error">
+          <AlertCircle size={16} /> {error}
+          <button onClick={() => setError(null)} className="tl-dismiss">×</button>
+        </div>
+      )}
 
-          <div className="log-expense-card">
-            <h3>Log Expense</h3>
-            <form className="expense-form">
+      {/* Status Filter Tabs */}
+      <div className="tl-filter-tabs">
+        {['ALL', 'DRAFT', 'DISPATCHED', 'COMPLETED', 'CANCELLED'].map(status => (
+          <button
+            key={status}
+            className={`tl-filter-tab ${statusFilter === status ? 'active' : ''}`}
+            onClick={() => setStatusFilter(status)}
+          >
+            {status === 'ALL' ? 'All Trips' : status === 'DISPATCHED' ? 'In Transit' : status.charAt(0) + status.slice(1).toLowerCase()}
+            <span className="tl-tab-count">{statusCounts[status]}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Trips Table */}
+      <div className="tl-table-card">
+        <table className="tl-table">
+          <thead>
+            <tr>
+              <th>TRIP ID</th>
+              <th>DRIVER</th>
+              <th>VEHICLE</th>
+              <th>ROUTE</th>
+              <th>CARGO (kg)</th>
+              <th>DISTANCE (km)</th>
+              <th>STATUS</th>
+              <th>CREATED</th>
+              <th className="text-right">ACTIONS</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading && (
+              <tr>
+                <td colSpan="9" className="tl-loading-cell">
+                  <Loader2 size={20} className="spin-icon" /> Loading trip history...
+                </td>
+              </tr>
+            )}
+            {!loading && filteredTrips.length === 0 && (
+              <tr>
+                <td colSpan="9" className="tl-empty-cell">
+                  {statusFilter !== 'ALL'
+                    ? <>No trips with status: <strong>{statusFilter}</strong></>
+                    : 'No trips recorded yet. Go to Dispatch to create your first trip.'
+                  }
+                </td>
+              </tr>
+            )}
+            {!loading && filteredTrips.map(trip => (
+              <tr key={trip.id} className="tl-row">
+                <td>
+                  <span className="tl-trip-id">TRP-{trip.id}</span>
+                </td>
+                <td>
+                  <div className="tl-driver-cell">
+                    <div className="tl-avatar">
+                      {(trip.driverName || 'D').charAt(0).toUpperCase()}
+                    </div>
+                    <span>{trip.driverName || `Driver #${trip.driverId}`}</span>
+                  </div>
+                </td>
+                <td>
+                  <div className="tl-vehicle-cell">
+                    <Truck size={14} />
+                    <span>{trip.vehicleRegistration || `#${trip.vehicleId}`}</span>
+                  </div>
+                </td>
+                <td className="tl-route-cell">
+                  {trip.source} → {trip.destination}
+                </td>
+                <td>{trip.cargoWeight ?? '--'}</td>
+                <td>
+                  {trip.actualDistance != null
+                    ? <span>{trip.actualDistance} <span className="tl-muted">/ {trip.plannedDistance || '--'}</span></span>
+                    : trip.plannedDistance || '--'
+                  }
+                </td>
+                <td>{getStatusBadge(trip.status)}</td>
+                <td className="tl-date-cell">{formatDate(trip.createdAt)}</td>
+                <td className="text-right">
+                  <div className="tl-actions">
+                    {trip.status === 'DRAFT' && (
+                      <button
+                        className="tl-action-btn tl-btn-dispatch"
+                        onClick={() => handleDispatch(trip.id)}
+                        disabled={actionLoading === trip.id}
+                        title="Dispatch this trip"
+                      >
+                        {actionLoading === trip.id ? <Loader2 size={13} className="spin-icon" /> : <Send size={13} />}
+                      </button>
+                    )}
+                    {trip.status === 'DISPATCHED' && (
+                      <button
+                        className="tl-action-btn tl-btn-complete"
+                        onClick={() => { setShowCompleteModal(trip.id); setActualDistance(''); }}
+                        disabled={actionLoading === trip.id}
+                        title="Complete trip"
+                      >
+                        <CheckCircle size={13} />
+                      </button>
+                    )}
+                    {(trip.status === 'DRAFT' || trip.status === 'DISPATCHED') && (
+                      <button
+                        className="tl-action-btn tl-btn-cancel"
+                        onClick={() => handleCancel(trip.id)}
+                        disabled={actionLoading === trip.id}
+                        title="Cancel trip"
+                      >
+                        {actionLoading === trip.id ? <Loader2 size={13} className="spin-icon" /> : <XCircle size={13} />}
+                      </button>
+                    )}
+                    {trip.status === 'COMPLETED' && (
+                      <button
+                        className="tl-action-btn tl-btn-expense"
+                        onClick={() => { setShowExpenseModal(trip.id); setExpenseError(null); }}
+                        title="Log fuel/expense"
+                      >
+                        <Plus size={13} />
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div className="tl-table-footer">
+          <span className="tl-footer-info">
+            Showing {filteredTrips.length} of {trips.length} trips
+          </span>
+        </div>
+      </div>
+
+      {/* Complete Trip Modal */}
+      {showCompleteModal && (
+        <div className="modal-overlay" onClick={() => setShowCompleteModal(null)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Complete Trip TRP-{showCompleteModal}</h3>
+              <button className="btn-close-modal" onClick={() => setShowCompleteModal(null)}><X size={20} /></button>
+            </div>
+            <div className="modal-form">
+              <div className="form-group">
+                <label>Actual Distance Traveled (km)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="e.g. 122.5"
+                  value={actualDistance}
+                  onChange={(e) => setActualDistance(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              <div className="modal-actions">
+                <button className="btn-modal-cancel" onClick={() => setShowCompleteModal(null)}>Cancel</button>
+                <button
+                  className="btn-modal-submit"
+                  onClick={handleComplete}
+                  disabled={actionLoading === showCompleteModal}
+                >
+                  {actionLoading === showCompleteModal ? 'Completing...' : 'Mark Complete'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Log Fuel/Expense Modal */}
+      {showExpenseModal && (
+        <div className="modal-overlay" onClick={() => setShowExpenseModal(null)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Log Expense — Trip TRP-{showExpenseModal}</h3>
+              <button className="btn-close-modal" onClick={() => setShowExpenseModal(null)}><X size={20} /></button>
+            </div>
+            {expenseError && (
+              <div style={{ padding: '8px 24px', color: '#DC2626', fontSize: 13 }}>{expenseError}</div>
+            )}
+            <form onSubmit={handleLogExpense} className="modal-form">
               <div className="form-group">
                 <label>Expense Type</label>
-                <select>
-                  <option>Fuel</option>
-                  <option>Toll</option>
-                  <option>Maintenance</option>
+                <select
+                  value={expenseForm.type}
+                  onChange={(e) => setExpenseForm({...expenseForm, type: e.target.value})}
+                >
+                  <option value="FUEL">Fuel</option>
+                  <option value="TOLL">Toll</option>
+                  <option value="MAINTENANCE">Maintenance</option>
+                  <option value="PARKING">Parking</option>
+                  <option value="REPAIR">Repair</option>
+                  <option value="OTHER">Other</option>
                 </select>
               </div>
-              <div className="form-group">
-                <label>Amount (USD)</label>
-                <input type="number" placeholder="0.00" />
-              </div>
+
+              {expenseForm.type === 'FUEL' ? (
+                <>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Liters</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="45.5"
+                        value={expenseForm.liters}
+                        onChange={(e) => setExpenseForm({...expenseForm, liters: e.target.value})}
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Cost ($)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="68.25"
+                        value={expenseForm.cost}
+                        onChange={(e) => setExpenseForm({...expenseForm, cost: e.target.value})}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label>Odometer Reading (km)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="12500"
+                      value={expenseForm.odometer}
+                      onChange={(e) => setExpenseForm({...expenseForm, odometer: e.target.value})}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="form-group">
+                    <label>Amount ($)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="15.00"
+                      value={expenseForm.amount}
+                      onChange={(e) => setExpenseForm({...expenseForm, amount: e.target.value})}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Description</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Highway toll charge"
+                      value={expenseForm.description}
+                      onChange={(e) => setExpenseForm({...expenseForm, description: e.target.value})}
+                    />
+                  </div>
+                </>
+              )}
+
               <div className="form-group">
                 <label>Date</label>
-                <input type="date" />
+                <input
+                  type="date"
+                  value={expenseForm.date}
+                  onChange={(e) => setExpenseForm({...expenseForm, date: e.target.value})}
+                  required
+                />
               </div>
-              <button type="button" className="btn btn-primary" style={{alignSelf: 'flex-end', marginBottom: '2px'}}>Add</button>
+
+              <div className="modal-actions">
+                <button type="button" className="btn-modal-cancel" onClick={() => setShowExpenseModal(null)}>Cancel</button>
+                <button type="submit" className="btn-modal-submit" disabled={expenseLoading}>
+                  {expenseLoading ? 'Saving...' : 'Save Expense'}
+                </button>
+              </div>
             </form>
           </div>
         </div>
-
-        <div className="sidebar-section">
-          <div className="profitability-card">
-            <h3 className="card-title"><TrendingUp size={16} /> Profitability</h3>
-            <div className="prof-row">
-              <span className="prof-label">Expected Revenue</span>
-              <span className="prof-value revenue">$4,500.00</span>
-            </div>
-            <div className="prof-row">
-              <span className="prof-label">Logged Expenses</span>
-              <span className="prof-value expense">-$190.20</span>
-            </div>
-            <hr />
-            <div className="prof-row">
-              <span className="prof-label-large">Current ROI</span>
-              <span className="prof-value-large">$4,309.80</span>
-            </div>
-            <div className="prof-margin">95% MARGIN</div>
-          </div>
-
-          <div className="recent-logs-card">
-            <div className="logs-header">Recent Logs</div>
-            <div className="logs-list">
-              {recentLogs.map((log, idx) => {
-                const Icon = log.icon;
-                return (
-                  <div className="log-item" key={idx}>
-                    <div className="log-icon-wrapper">
-                      <Icon size={16} />
-                    </div>
-                    <div className="log-details">
-                      <div className="log-type">{log.type} ({log.place})</div>
-                      <div className="log-date">{log.date}</div>
-                    </div>
-                    <div className="log-amount">{log.amount}</div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
 }

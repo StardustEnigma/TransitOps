@@ -289,3 +289,114 @@
   background-color: #1A1A1B;
   color: white;
 }
+
+/* Row Action Buttons */
+.text-right { text-align: right; }
+
+.row-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.row-action-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--white);
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.row-action-btn:hover {
+  background: #F3F4F6;
+  color: var(--text-main);
+}
+
+.row-action-delete:hover {
+  background: #FEF2F2;
+  color: #DC2626;
+  border-color: #FECACA;
+}
+
+.row-action-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* Safety Score Bar */
+.safety-score-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.score-bar {
+  width: 60px;
+  height: 6px;
+  background: #E2E8F0;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.score-fill {
+  height: 100%;
+  background: #1A1A1B;
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+
+.score-value {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.cell-muted {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* Delete Confirmation */
+.modal-card-sm {
+  max-width: 400px;
+}
+
+.delete-warning {
+  font-size: 14px;
+  color: var(--text-main);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.btn-delete-confirm {
+  background: #DC2626 !important;
+}
+
+.btn-delete-confirm:hover {
+  opacity: 0.9;
+}
+
+/* Status badges for IN_SHOP and RETIRED */
+.status-in-shop {
+  background-color: #FEF3C7;
+  color: #92400E;
+}
+.status-in-shop .dot { background-color: #92400E; }
+
+.status-retired {
+  background-color: #F3F4F6;
+  color: #6B7280;
+}
+.status-retired .dot { background-color: #6B7280; }
+
+.status-suspended {
+  background-color: #FEE2E2;
+  color: #DC2626;
+}
+.status-suspended .dot { background-color: #DC2626; }

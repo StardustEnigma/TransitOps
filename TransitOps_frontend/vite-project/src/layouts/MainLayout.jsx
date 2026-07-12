@@ -28,7 +28,7 @@ export default function MainLayout() {
               <span className="logo-subtitle">FLEET CONTROL</span>
             </div>
           </div>
-          <button className="new-dispatch-btn">
+          <button className="new-dispatch-btn" onClick={() => navigate('/dispatch')}>
             <Plus size={16} /> NEW DISPATCH
           </button>
         </div>
@@ -72,6 +72,7 @@ export default function MainLayout() {
               <div className="avatar">
                 <img src="https://i.pravatar.cc/150?u=a042581f4e29026704d" alt="User" />
               </div>
+              <span className="user-name">{user?.name || 'Operator'}</span>
               <span className="user-role">{user?.role?.replace('_', ' ') || 'ADMIN'}</span>
             </div>
           </div>

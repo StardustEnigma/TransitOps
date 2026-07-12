@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Car, CheckCircle, Wrench, Route, Clock, UserCheck, PieChart,
   ArrowRight, Loader2, AlertCircle
@@ -7,6 +8,7 @@ import { dashboardApi, tripsApi, vehiclesApi } from '../services/api';
 import './Dashboard.css';
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [kpis, setKpis] = useState(null);
   const [trips, setTrips] = useState([]);
   const [vehicles, setVehicles] = useState([]);
@@ -102,8 +104,14 @@ export default function Dashboard() {
     cargoWeight: trip.cargoWeight
   }));
 
-  // Vehicle status breakdown for donut chart
+  // Vehicle status breakdown for donut chart — compute dynamic percentages
   const nonRetired = vehicles.filter(v => v.status !== 'RETIRED').length || 1;
+  const onTripPct = totalVehicles > 0 ? ((onTripVehicles / nonRetired) * 100).toFixed(0) : 0;
+  const availablePct = totalVehicles > 0 ? ((availableVehicles / nonRetired) * 100).toFixed(0) : 0;
+  const inShopPct = totalVehicles > 0 ? ((inShopVehicles / nonRetired) * 100).toFixed(0) : 0;
+  const donutStyle = totalVehicles > 0
+    ? { background: `conic-gradient(#1A1A1B 0% ${onTripPct}%, #DBEAFE ${onTripPct}% ${parseFloat(onTripPct) + parseFloat(availablePct)}%, #DC2626 ${parseFloat(onTripPct) + parseFloat(availablePct)}% 100%)` }
+    : { background: '#E2E8F0' };
 
   return (
     <div className="dashboard-page">
@@ -149,7 +157,7 @@ export default function Dashboard() {
           <h2 className="card-title">Fleet Status</h2>
           
           <div className="donut-chart-container">
-            <div className="donut-chart">
+            <div className="donut-chart" style={donutStyle}>
               <div className="donut-inner">
                 <span className="donut-value">{loading ? '...' : totalVehicles}</span>
                 <span className="donut-label">Total Units</span>
@@ -183,7 +191,7 @@ export default function Dashboard() {
         <div className="recent-trips-card">
           <div className="card-header-row">
             <h2 className="card-title">Recent Trip History</h2>
-            <button className="view-all-btn">
+            <button className="view-all-btn" onClick={() => navigate('/triplogs')}>
               VIEW ALL <ArrowRight size={14} />
             </button>
           </div>

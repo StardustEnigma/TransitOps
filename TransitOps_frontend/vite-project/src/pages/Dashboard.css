@@ -145,15 +145,13 @@
   width: 200px;
   height: 200px;
   border-radius: 50%;
-  background: conic-gradient(
-    #1A1A1B 0% 55%,      /* On Trip */
-    #DBEAFE 55% 85%,     /* Available */
-    #DC2626 85% 100%     /* Maintenance */
-  );
+  /* background applied inline from dynamic data */
+  background: #E2E8F0;
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
+  transition: background 0.3s;
 }
 
 .donut-inner {
@@ -292,13 +290,23 @@
 }
 
 .trip-completed {
-  background-color: #1A1A1B;
-  color: white;
+  background-color: #D1FAE5;
+  color: #065F46;
 }
 
 .trip-in-transit {
   background-color: #1A1A1B;
   color: white;
+}
+
+.trip-draft {
+  background-color: #FEF3C7;
+  color: #92400E;
+}
+
+.trip-cancelled {
+  background-color: #F3F4F6;
+  color: #6B7280;
 }
 
 .trip-delayed {

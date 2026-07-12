@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Car, UserPlus, Users, Filter, User, AlertCircle, AlertTriangle, Loader2, X } from 'lucide-react';
+import { Car, UserPlus, Users, Filter, User, AlertCircle, AlertTriangle, Loader2, X, Edit2, Trash2 } from 'lucide-react';
 import { vehiclesApi, driversApi } from '../services/api';
 import './Directory.css';
 
@@ -11,11 +11,19 @@ export default function Directory() {
   const [error, setError] = useState(null);
   const [statusFilter, setStatusFilter] = useState('');
 
-  // Add modals
+  // Add/Edit modals
   const [showAddVehicle, setShowAddVehicle] = useState(false);
   const [showAddDriver, setShowAddDriver] = useState(false);
   const [formError, setFormError] = useState(null);
   const [formLoading, setFormLoading] = useState(false);
+
+  // Edit mode
+  const [editingVehicleId, setEditingVehicleId] = useState(null);
+  const [editingDriverId, setEditingDriverId] = useState(null);
+
+  // Delete confirmation
+  const [deleteConfirm, setDeleteConfirm] = useState(null); // { type: 'vehicle'|'driver', id, name }
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Vehicle form
   const [vehicleForm, setVehicleForm] = useState({
@@ -51,18 +59,27 @@ export default function Directory() {
     }
   };
 
+  // ——— Vehicle CRUD ———
   const handleAddVehicle = async (e) => {
     e.preventDefault();
     setFormLoading(true);
     setFormError(null);
     try {
-      await vehiclesApi.create({
+      const payload = {
         ...vehicleForm,
         maxLoadCapacity: parseFloat(vehicleForm.maxLoadCapacity) || 0,
         odometer: parseFloat(vehicleForm.odometer) || 0,
         acquisitionCost: parseFloat(vehicleForm.acquisitionCost) || 0
-      });
+      };
+
+      if (editingVehicleId) {
+        await vehiclesApi.update(editingVehicleId, payload);
+      } else {
+        await vehiclesApi.create(payload);
+      }
+
       setShowAddVehicle(false);
+      setEditingVehicleId(null);
       setVehicleForm({ registrationNumber: '', modelName: '', type: 'Cargo Van', maxLoadCapacity: '', odometer: '', acquisitionCost: '' });
       fetchData();
     } catch (err) {
@@ -72,22 +89,79 @@ export default function Directory() {
     }
   };
 
+  const openEditVehicle = (v) => {
+    setVehicleForm({
+      registrationNumber: v.registrationNumber || '',
+      modelName: v.modelName || '',
+      type: v.type || 'Cargo Van',
+      maxLoadCapacity: v.maxLoadCapacity ?? '',
+      odometer: v.odometer ?? '',
+      acquisitionCost: v.acquisitionCost ?? ''
+    });
+    setEditingVehicleId(v.id);
+    setShowAddVehicle(true);
+    setFormError(null);
+  };
+
+  // ——— Driver CRUD ———
   const handleAddDriver = async (e) => {
     e.preventDefault();
     setFormLoading(true);
     setFormError(null);
     try {
-      await driversApi.create({
+      const payload = {
         ...driverForm,
         safetyScore: parseInt(driverForm.safetyScore) || 90
-      });
+      };
+
+      if (editingDriverId) {
+        await driversApi.update(editingDriverId, payload);
+      } else {
+        await driversApi.create(payload);
+      }
+
       setShowAddDriver(false);
+      setEditingDriverId(null);
       setDriverForm({ name: '', licenseNumber: '', licenseCategory: 'Class A', licenseExpiry: '', contactNumber: '', safetyScore: 90 });
       fetchData();
     } catch (err) {
       setFormError(err.fieldErrors ? Object.values(err.fieldErrors).join(', ') : err.message);
     } finally {
       setFormLoading(false);
+    }
+  };
+
+  const openEditDriver = (d) => {
+    setDriverForm({
+      name: d.name || '',
+      licenseNumber: d.licenseNumber || '',
+      licenseCategory: d.licenseCategory || 'Class A',
+      licenseExpiry: d.licenseExpiry || '',
+      contactNumber: d.contactNumber || '',
+      safetyScore: d.safetyScore ?? 90
+    });
+    setEditingDriverId(d.id);
+    setShowAddDriver(true);
+    setFormError(null);
+  };
+
+  // ——— Delete ———
+  const handleDelete = async () => {
+    if (!deleteConfirm) return;
+    setDeleteLoading(true);
+    try {
+      if (deleteConfirm.type === 'vehicle') {
+        await vehiclesApi.delete(deleteConfirm.id);
+      } else {
+        await driversApi.delete(deleteConfirm.id);
+      }
+      setDeleteConfirm(null);
+      fetchData();
+    } catch (err) {
+      setError(err.message);
+      setDeleteConfirm(null);
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -113,10 +187,10 @@ export default function Directory() {
           <p>Manage your fleet vehicles and assigned personnel.</p>
         </div>
         <div className="header-actions">
-          <button className="btn btn-outline" onClick={() => { setShowAddVehicle(true); setFormError(null); }}>
+          <button className="btn btn-outline" onClick={() => { setShowAddVehicle(true); setEditingVehicleId(null); setVehicleForm({ registrationNumber: '', modelName: '', type: 'Cargo Van', maxLoadCapacity: '', odometer: '', acquisitionCost: '' }); setFormError(null); }}>
             <Car size={16} /> ADD VEHICLE
           </button>
-          <button className="btn btn-primary" onClick={() => { setShowAddDriver(true); setFormError(null); }}>
+          <button className="btn btn-primary" onClick={() => { setShowAddDriver(true); setEditingDriverId(null); setDriverForm({ name: '', licenseNumber: '', licenseCategory: 'Class A', licenseExpiry: '', contactNumber: '', safetyScore: 90 }); setFormError(null); }}>
             <UserPlus size={16} /> ADD DRIVER
           </button>
         </div>
@@ -172,14 +246,17 @@ export default function Directory() {
                 <th>ID</th>
                 <th>NAME</th>
                 <th>LICENSE</th>
+                <th>CONTACT</th>
+                <th>SAFETY SCORE</th>
                 <th>STATUS</th>
                 <th>LICENSE EXPIRY</th>
+                <th className="text-right">ACTIONS</th>
               </tr>
             </thead>
             <tbody>
               {!loading && drivers.length === 0 && (
                 <tr>
-                  <td colSpan="5" style={{ textAlign: 'center', padding: '32px 0', color: '#6B7280', fontSize: 13 }}>
+                  <td colSpan="8" style={{ textAlign: 'center', padding: '32px 0', color: '#6B7280', fontSize: 13 }}>
                     No drivers found. Click "ADD DRIVER" to register one.
                   </td>
                 </tr>
@@ -195,6 +272,15 @@ export default function Directory() {
                     </td>
                     <td>{d.name}</td>
                     <td>{d.licenseCategory} ({d.licenseNumber})</td>
+                    <td className="cell-muted">{d.contactNumber || '--'}</td>
+                    <td>
+                      <div className="safety-score-cell">
+                        <div className="score-bar">
+                          <div className="score-fill" style={{ width: `${d.safetyScore || 0}%` }}></div>
+                        </div>
+                        <span className="score-value">{d.safetyScore ?? '--'}</span>
+                      </div>
+                    </td>
                     <td>
                       <span className={`status-badge status-${d.status?.toLowerCase().replace('_', '-')}`}>
                         <span className="dot"></span> {d.status?.replace('_', ' ')}
@@ -217,6 +303,21 @@ export default function Directory() {
                         )}
                       </div>
                     </td>
+                    <td className="text-right">
+                      <div className="row-actions">
+                        <button className="row-action-btn" title="Edit Driver" onClick={() => openEditDriver(d)}>
+                          <Edit2 size={14} />
+                        </button>
+                        <button
+                          className="row-action-btn row-action-delete"
+                          title="Delete Driver"
+                          onClick={() => setDeleteConfirm({ type: 'driver', id: d.id, name: d.name })}
+                          disabled={d.status === 'ON_TRIP'}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
@@ -229,14 +330,17 @@ export default function Directory() {
                 <th>REG #</th>
                 <th>MODEL</th>
                 <th>TYPE</th>
+                <th>MAX LOAD (kg)</th>
                 <th>STATUS</th>
                 <th>ODOMETER</th>
+                <th>COST ($)</th>
+                <th className="text-right">ACTIONS</th>
               </tr>
             </thead>
             <tbody>
               {!loading && vehicles.length === 0 && (
                 <tr>
-                  <td colSpan="5" style={{ textAlign: 'center', padding: '32px 0', color: '#6B7280', fontSize: 13 }}>
+                  <td colSpan="8" style={{ textAlign: 'center', padding: '32px 0', color: '#6B7280', fontSize: 13 }}>
                     No vehicles found. Click "ADD VEHICLE" to register one.
                   </td>
                 </tr>
@@ -250,12 +354,29 @@ export default function Directory() {
                   </td>
                   <td>{v.modelName}</td>
                   <td>{v.type}</td>
+                  <td>{v.maxLoadCapacity != null ? v.maxLoadCapacity.toLocaleString() : '--'}</td>
                   <td>
                     <span className={`status-badge status-${v.status?.toLowerCase().replace('_', '-')}`}>
                       <span className="dot"></span> {v.status?.replace('_', ' ')}
                     </span>
                   </td>
                   <td>{v.odometer != null ? `${v.odometer.toLocaleString()} km` : '--'}</td>
+                  <td>{v.acquisitionCost != null ? `$${v.acquisitionCost.toLocaleString()}` : '--'}</td>
+                  <td className="text-right">
+                    <div className="row-actions">
+                      <button className="row-action-btn" title="Edit Vehicle" onClick={() => openEditVehicle(v)}>
+                        <Edit2 size={14} />
+                      </button>
+                      <button
+                        className="row-action-btn row-action-delete"
+                        title="Delete Vehicle"
+                        onClick={() => setDeleteConfirm({ type: 'vehicle', id: v.id, name: v.registrationNumber })}
+                        disabled={v.status === 'ON_TRIP'}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -263,13 +384,13 @@ export default function Directory() {
         )}
       </div>
 
-      {/* Add Vehicle Modal */}
+      {/* Add/Edit Vehicle Modal */}
       {showAddVehicle && (
-        <div className="modal-overlay" onClick={() => setShowAddVehicle(false)}>
+        <div className="modal-overlay" onClick={() => { setShowAddVehicle(false); setEditingVehicleId(null); }}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Add Vehicle</h3>
-              <button className="btn-close-modal" onClick={() => setShowAddVehicle(false)}><X size={20} /></button>
+              <h3>{editingVehicleId ? 'Edit Vehicle' : 'Add Vehicle'}</h3>
+              <button className="btn-close-modal" onClick={() => { setShowAddVehicle(false); setEditingVehicleId(null); }}><X size={20} /></button>
             </div>
             {formError && <div style={{ padding: '8px 24px', color: '#DC2626', fontSize: 13 }}>{formError}</div>}
             <form onSubmit={handleAddVehicle} className="modal-form">
@@ -302,9 +423,9 @@ export default function Directory() {
                 </div>
               </div>
               <div className="modal-actions">
-                <button type="button" className="btn-modal-cancel" onClick={() => setShowAddVehicle(false)}>Cancel</button>
+                <button type="button" className="btn-modal-cancel" onClick={() => { setShowAddVehicle(false); setEditingVehicleId(null); }}>Cancel</button>
                 <button type="submit" className="btn-modal-submit" disabled={formLoading}>
-                  {formLoading ? 'Saving...' : 'Save Vehicle'}
+                  {formLoading ? 'Saving...' : (editingVehicleId ? 'Update Vehicle' : 'Save Vehicle')}
                 </button>
               </div>
             </form>
@@ -312,13 +433,13 @@ export default function Directory() {
         </div>
       )}
 
-      {/* Add Driver Modal */}
+      {/* Add/Edit Driver Modal */}
       {showAddDriver && (
-        <div className="modal-overlay" onClick={() => setShowAddDriver(false)}>
+        <div className="modal-overlay" onClick={() => { setShowAddDriver(false); setEditingDriverId(null); }}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Add Driver</h3>
-              <button className="btn-close-modal" onClick={() => setShowAddDriver(false)}><X size={20} /></button>
+              <h3>{editingDriverId ? 'Edit Driver' : 'Add Driver'}</h3>
+              <button className="btn-close-modal" onClick={() => { setShowAddDriver(false); setEditingDriverId(null); }}><X size={20} /></button>
             </div>
             {formError && <div style={{ padding: '8px 24px', color: '#DC2626', fontSize: 13 }}>{formError}</div>}
             <form onSubmit={handleAddDriver} className="modal-form">
@@ -355,12 +476,39 @@ export default function Directory() {
                 <input type="number" min="0" max="100" value={driverForm.safetyScore} onChange={e => setDriverForm({...driverForm, safetyScore: e.target.value})} />
               </div>
               <div className="modal-actions">
-                <button type="button" className="btn-modal-cancel" onClick={() => setShowAddDriver(false)}>Cancel</button>
+                <button type="button" className="btn-modal-cancel" onClick={() => { setShowAddDriver(false); setEditingDriverId(null); }}>Cancel</button>
                 <button type="submit" className="btn-modal-submit" disabled={formLoading}>
-                  {formLoading ? 'Saving...' : 'Save Driver'}
+                  {formLoading ? 'Saving...' : (editingDriverId ? 'Update Driver' : 'Save Driver')}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div className="modal-overlay" onClick={() => setDeleteConfirm(null)}>
+          <div className="modal-card modal-card-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Confirm Delete</h3>
+              <button className="btn-close-modal" onClick={() => setDeleteConfirm(null)}><X size={20} /></button>
+            </div>
+            <div className="modal-form">
+              <p className="delete-warning">
+                Are you sure you want to delete <strong>{deleteConfirm.name}</strong>? This action cannot be undone.
+              </p>
+              <div className="modal-actions">
+                <button className="btn-modal-cancel" onClick={() => setDeleteConfirm(null)}>Cancel</button>
+                <button
+                  className="btn-modal-submit btn-delete-confirm"
+                  onClick={handleDelete}
+                  disabled={deleteLoading}
+                >
+                  {deleteLoading ? 'Deleting...' : 'Delete'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

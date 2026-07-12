@@ -175,8 +175,9 @@
 
 .user-profile {
   display: flex;
+  flex-direction: row;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   border-left: 1px solid var(--border);
   padding-left: 20px;
 }
@@ -189,9 +190,15 @@
 }
 
 .user-role {
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.user-name {
+  font-size: 13px;
+  font-weight: 600;
   color: var(--text-main);
 }
 
