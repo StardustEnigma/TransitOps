@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "8b5f3a1d-72fb-4e78-90f1-6a1e3a9c7b4d",
 		"name": "TransitOps API",
-		"description": "TransitOps REST API Collection for Smart Transport Operations Platform. Includes Auth (JWT), Vehicles, Drivers, Trips, Maintenance, Fuel Logs, and Expenses.",
+		"description": "TransitOps REST API Collection for Smart Transport Operations Platform. Includes Auth (JWT), Vehicles, Drivers, Trips, Maintenance, Fuel Logs, Expenses, Dashboard, and Reports.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
@@ -499,6 +499,107 @@
 							"path": [
 								"api",
 								"expenses"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Dashboard & Reports",
+			"item": [
+				{
+					"name": "Get Dashboard KPIs",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/dashboard/kpis",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"dashboard",
+								"kpis"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Fuel Efficiency Report",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/reports/fuel-efficiency",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"reports",
+								"fuel-efficiency"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Operational Cost Report",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/reports/operational-cost",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"reports",
+								"operational-cost"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Vehicle ROI Report",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/reports/roi",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"reports",
+								"roi"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Export Reports CSV",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/reports/export/csv",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"reports",
+								"export",
+								"csv"
 							]
 						}
 					},
