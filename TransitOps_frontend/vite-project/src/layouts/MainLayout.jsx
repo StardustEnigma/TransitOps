@@ -1,12 +1,21 @@
 import React from 'react';
-import { Outlet, NavLink } from 'react-router-dom';
+import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { 
   Truck, LayoutDashboard, Route as RouteIcon, History, Settings, HelpCircle, 
-  Search, Bell, Plus, Wrench, BarChart2
+  Search, Bell, Plus, Wrench, BarChart2, LogOut
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import './MainLayout.css';
 
 export default function MainLayout() {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
   return (
     <div className="layout-container">
       {/* Sidebar */}
@@ -31,12 +40,6 @@ export default function MainLayout() {
           <NavLink to="/directory" className={({isActive}) => isActive ? "nav-item active" : "nav-item"}>
             <Truck size={18} /> FLEET & DRIVERS
           </NavLink>
-          <NavLink to="/dispatch" className={({isActive}) => isActive ? "nav-item active" : "nav-item"}>
-            <RouteIcon size={18} /> DISPATCH
-          </NavLink>
-          <NavLink to="/triplogs" className={({isActive}) => isActive ? "nav-item active" : "nav-item"}>
-            <History size={18} /> TRIP LOGS
-          </NavLink>
           <NavLink to="/maintenance" className={({isActive}) => isActive ? "nav-item active" : "nav-item"}>
             <Wrench size={18} /> MAINTENANCE
           </NavLink>
@@ -49,9 +52,9 @@ export default function MainLayout() {
           <a href="#" className="nav-item">
             <Settings size={18} /> SETTINGS
           </a>
-          <a href="#" className="nav-item">
-            <HelpCircle size={18} /> SUPPORT
-          </a>
+          <button className="nav-item" onClick={handleLogout} style={{ border: 'none', background: 'none', cursor: 'pointer', width: '100%' }}>
+            <LogOut size={18} /> SIGN OUT
+          </button>
         </div>
       </aside>
 
@@ -70,7 +73,7 @@ export default function MainLayout() {
               <div className="avatar">
                 <img src="https://i.pravatar.cc/150?u=a042581f4e29026704d" alt="User" />
               </div>
-              <span className="user-role">ADMIN</span>
+              <span className="user-role">{user?.role?.replace('_', ' ') || 'ADMIN'}</span>
             </div>
           </div>
         </header>

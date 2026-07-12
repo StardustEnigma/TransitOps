@@ -1,16 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-  Calendar, 
-  Layers, 
-  Download, 
-  MoreVertical, 
-  Truck, 
-  Bus, 
-  Car, 
-  TrendingDown, 
-  TrendingUp,
-  Info
+  Calendar, Layers, Download, MoreVertical, Truck, Bus, Car, 
+  TrendingDown, TrendingUp, Loader2, AlertCircle
 } from 'lucide-react';
+import { reportsApi, expensesApi } from '../services/api';
 import './Reports.css';
 
 export default function Reports() {
@@ -20,448 +13,414 @@ export default function Reports() {
   const [showSegmentMenu, setShowSegmentMenu] = useState(false);
   const [hoveredData, setHoveredData] = useState(null);
 
-  const [roiVehicles, setRoiVehicles] = useState([
-    {
-      id: 'TRK-9021',
-      type: 'Truck',
-      q1: 'Good',
-      q2: 'Good',
-      q3: 'Avg',
-      q4: 'Low',
-      trend: 'down'
-    },
-    {
-      id: 'TRK-4432',
-      type: 'Truck',
-      q1: 'Avg',
-      q2: 'Avg+',
-      q3: 'Good',
-      q4: 'Good',
-      trend: 'up'
-    },
-    {
-      id: 'BUS-1104',
-      type: 'Bus',
-      q1: 'Good',
-      q2: 'Good',
-      q3: 'Good',
-      q4: 'High',
-      trend: 'up'
-    },
-    {
-      id: 'VAN-308',
-      type: 'Van',
-      q1: 'Avg',
-      q2: 'Avg+',
-      q3: 'Good',
-      q4: 'Avg+',
-      trend: 'up'
-    }
-  ]);
+  const [fuelEfficiency, setFuelEfficiency] = useState([]);
+  const [operationalCost, setOperationalCost] = useState([]);
+  const [roiData, setRoiData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [csvLoading, setCsvLoading] = useState(false);
 
-  const handleDownloadCSV = () => {
-    const headers = 'Vehicle ID,Q1,Q2,Q3,Q4,Trend\n';
-    const rows = roiVehicles.map(v => `${v.id},${v.q1},${v.q2},${v.q3},${v.q4},${v.trend}`).join('\n');
-    const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `TransitOps_Performance_${timeRange.replace(/\s+/g, '_')}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+  useEffect(() => {
+    fetchReports();
+  }, []);
 
-  const getRoiBadge = (grade) => {
-    switch (grade) {
-      case 'High':
-        return <span className="roi-pill roi-high">High</span>;
-      case 'Good':
-        return <span className="roi-pill roi-good">Good</span>;
-      case 'Avg+':
-        return <span className="roi-pill roi-avgplus">Avg+</span>;
-      case 'Avg':
-        return <span className="roi-pill roi-avg">Avg</span>;
-      case 'Low':
-        return <span className="roi-pill roi-low">Low</span>;
-      default:
-        return <span className="roi-pill">{grade}</span>;
+  const fetchReports = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const results = await Promise.allSettled([
+        reportsApi.getFuelEfficiency(),
+        reportsApi.getOperationalCost(),
+        reportsApi.getRoi()
+      ]);
+
+      if (results[0].status === 'fulfilled') {
+        setFuelEfficiency(Array.isArray(results[0].value) ? results[0].value : []);
+      }
+      if (results[1].status === 'fulfilled') {
+        setOperationalCost(Array.isArray(results[1].value) ? results[1].value : []);
+      }
+      if (results[2].status === 'fulfilled') {
+        setRoiData(Array.isArray(results[2].value) ? results[2].value : []);
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const getVehicleIcon = (type) => {
-    switch (type?.toLowerCase()) {
-      case 'bus':
-        return <Bus size={18} />;
-      case 'van':
-        return <Car size={18} />;
-      default:
-        return <Truck size={18} />;
+  const handleDownloadCSV = async () => {
+    setCsvLoading(true);
+    try {
+      await reportsApi.downloadCsv();
+    } catch (err) {
+      // Fallback: generate CSV locally from available data
+      const headers = 'Vehicle ID,Fuel Efficiency (km/l),Total Cost ($),ROI\n';
+      const rows = roiData.map(v => 
+        `${v.vehicleRegistration || v.vehicleId},${v.fuelEfficiency || '--'},${v.totalCost || '--'},${v.roi != null ? v.roi.toFixed(2) : '--'}`
+      ).join('\n');
+      const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `TransitOps_Report_${timeRange.replace(/\s+/g, '_')}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } finally {
+      setCsvLoading(false);
     }
   };
+
+  // Compute cost breakdown from operational cost data
+  const totalFuelCost = operationalCost.reduce((sum, v) => sum + (v.fuelCost || 0), 0);
+  const totalMaintCost = operationalCost.reduce((sum, v) => sum + (v.maintenanceCost || 0), 0);
+  const totalOtherCost = operationalCost.reduce((sum, v) => sum + (v.otherCost || 0), 0);
+  const grandTotal = totalFuelCost + totalMaintCost + totalOtherCost;
+  
+  const fuelPct = grandTotal > 0 ? ((totalFuelCost / grandTotal) * 100).toFixed(0) : 0;
+  const maintPct = grandTotal > 0 ? ((totalMaintCost / grandTotal) * 100).toFixed(0) : 0;
+  const otherPct = grandTotal > 0 ? ((totalOtherCost / grandTotal) * 100).toFixed(0) : 0;
+  const totalDisplay = grandTotal >= 1000 ? `$${(grandTotal / 1000).toFixed(0)}K` : `$${grandTotal.toFixed(0)}`;
+
+  // Donut chart math
+  const circumference = 2 * Math.PI * 75; // 471.24
+  const fuelArc = (parseFloat(fuelPct) / 100) * circumference;
+  const maintArc = (parseFloat(maintPct) / 100) * circumference;
+  const otherArc = (parseFloat(otherPct) / 100) * circumference;
+
+  // ROI badge helper
+  const getRoiBadge = (roi) => {
+    if (roi == null) return <span className="roi-pill roi-avg">N/A</span>;
+    if (roi > 0.5) return <span className="roi-pill roi-high">High ({(roi * 100).toFixed(0)}%)</span>;
+    if (roi > 0.2) return <span className="roi-pill roi-good">Good ({(roi * 100).toFixed(0)}%)</span>;
+    if (roi > 0) return <span className="roi-pill roi-avg">Avg ({(roi * 100).toFixed(0)}%)</span>;
+    return <span className="roi-pill roi-low">Low ({(roi * 100).toFixed(0)}%)</span>;
+  };
+
+  const getVehicleIcon = (reg) => {
+    const r = (reg || '').toUpperCase();
+    if (r.includes('BUS')) return <Bus size={18} />;
+    if (r.includes('VAN')) return <Car size={18} />;
+    return <Truck size={18} />;
+  };
+
+  // Build fuel efficiency chart data points (use first 6 vehicles)
+  const chartVehicles = fuelEfficiency.slice(0, 6);
+  const chartXPositions = [65, 170, 275, 380, 485, 590];
+
+  // Scale efficiency values to Y positions (range: 0-20 mapped to y: 254-30)
+  const scaleY = (val) => {
+    const maxVal = 20;
+    const minY = 30;
+    const maxY = 254;
+    const clamped = Math.min(Math.max(val || 0, 0), maxVal);
+    return maxY - ((clamped / maxVal) * (maxY - minY));
+  };
+
+  const hasChartData = chartVehicles.length > 0;
 
   return (
     <div className="reports-page">
-        {/* Top Title Banner */}
-        <div className="reports-top-title">
-          <span>Reports & Analytics</span>
+      {/* Top Title Banner */}
+      <div className="reports-top-title">
+        <span>Reports & Analytics</span>
+      </div>
+
+      {/* Fleet Performance Header & Action Buttons */}
+      <div className="performance-header-bar">
+        <div className="performance-title-group">
+          <h1 className="performance-title">Fleet Performance</h1>
+          <p className="performance-subtitle">
+            {loading ? 'Loading operational metrics...' : 'Comprehensive overview of operational metrics.'}
+          </p>
         </div>
 
-        {/* Fleet Performance Header & Action Buttons */}
-        <div className="performance-header-bar">
-          <div className="performance-title-group">
-            <h1 className="performance-title">Fleet Performance</h1>
-            <p className="performance-subtitle">Comprehensive overview of operational metrics.</p>
+        <div className="performance-controls">
+          <div className="control-dropdown-wrapper">
+            <button 
+              className="btn-control-filter"
+              onClick={() => { setShowRangeMenu(!showRangeMenu); setShowSegmentMenu(false); }}
+            >
+              <Calendar size={16} className="control-icon" />
+              <span>{timeRange}</span>
+            </button>
+            {showRangeMenu && (
+              <div className="control-menu">
+                {['Last 7 Days', 'Last 30 Days', 'Last 90 Days', 'Year to Date'].map(range => (
+                  <button
+                    key={range}
+                    className={`control-menu-item ${timeRange === range ? 'active' : ''}`}
+                    onClick={() => { setTimeRange(range); setShowRangeMenu(false); }}
+                  >
+                    {range}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
-          <div className="performance-controls">
-            {/* Time Range Filter */}
-            <div className="control-dropdown-wrapper">
-              <button 
-                className="btn-control-filter"
-                onClick={() => {
-                  setShowRangeMenu(!showRangeMenu);
-                  setShowSegmentMenu(false);
-                }}
-              >
-                <Calendar size={16} className="control-icon" />
-                <span>{timeRange}</span>
-              </button>
-              {showRangeMenu && (
-                <div className="control-menu">
-                  {['Last 7 Days', 'Last 30 Days', 'Last 90 Days', 'Year to Date'].map(range => (
-                    <button
-                      key={range}
-                      className={`control-menu-item ${timeRange === range ? 'active' : ''}`}
-                      onClick={() => {
-                        setTimeRange(range);
-                        setShowRangeMenu(false);
-                      }}
-                    >
-                      {range}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+          <div className="control-dropdown-wrapper">
+            <button 
+              className="btn-control-filter"
+              onClick={() => { setShowSegmentMenu(!showSegmentMenu); setShowRangeMenu(false); }}
+            >
+              <Layers size={16} className="control-icon" />
+              <span>{segment}</span>
+            </button>
+            {showSegmentMenu && (
+              <div className="control-menu">
+                {['All Segments', 'Heavy Fleet (Trucks)', 'Light Fleet (Vans/Buses)'].map(seg => (
+                  <button
+                    key={seg}
+                    className={`control-menu-item ${segment === seg ? 'active' : ''}`}
+                    onClick={() => { setSegment(seg); setShowSegmentMenu(false); }}
+                  >
+                    {seg}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
-            {/* Segments Filter */}
-            <div className="control-dropdown-wrapper">
-              <button 
-                className="btn-control-filter"
-                onClick={() => {
-                  setShowSegmentMenu(!showSegmentMenu);
-                  setShowRangeMenu(false);
-                }}
-              >
-                <Layers size={16} className="control-icon" />
-                <span>{segment}</span>
-              </button>
-              {showSegmentMenu && (
-                <div className="control-menu">
-                  {['All Segments', 'Heavy Fleet (Trucks)', 'Light Fleet (Vans/Buses)'].map(seg => (
-                    <button
-                      key={seg}
-                      className={`control-menu-item ${segment === seg ? 'active' : ''}`}
-                      onClick={() => {
-                        setSegment(seg);
-                        setShowSegmentMenu(false);
-                      }}
-                    >
-                      {seg}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+          <button className="btn-download-csv" onClick={handleDownloadCSV} disabled={csvLoading}>
+            {csvLoading ? <Loader2 size={16} className="spin-icon" /> : <Download size={16} strokeWidth={2.5} />}
+            <span>{csvLoading ? 'Exporting...' : 'Download CSV'}</span>
+          </button>
+        </div>
+      </div>
 
-            {/* Download CSV Button */}
-            <button className="btn-download-csv" onClick={handleDownloadCSV}>
-              <Download size={16} strokeWidth={2.5} />
-              <span>Download CSV</span>
+      {error && (
+        <div style={{ padding: '12px 16px', background: '#FEF2F2', color: '#DC2626', borderRadius: 8, marginBottom: 16, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <AlertCircle size={16} /> {error}
+        </div>
+      )}
+
+      {/* Charts Grid */}
+      <div className="charts-grid-row">
+        {/* Fuel Efficiency Chart */}
+        <div className="chart-card efficiency-card">
+          <div className="chart-card-header">
+            <div>
+              <h2 className="chart-card-title">Fuel Efficiency</h2>
+              <p className="chart-card-subtitle">
+                {hasChartData 
+                  ? `Distance / Liters per Vehicle (${chartVehicles.length} vehicles)`
+                  : 'Add vehicles and fuel logs to see efficiency data'
+                }
+              </p>
+            </div>
+            <button className="btn-more-options" title="Chart Options">
+              <MoreVertical size={18} />
             </button>
           </div>
-        </div>
 
-        {/* Middle Charts Grid (2 Columns: ~65% / ~35%) */}
-        <div className="charts-grid-row">
-          {/* Fuel Efficiency Trends Line Chart Card */}
-          <div className="chart-card efficiency-card">
-            <div className="chart-card-header">
-              <div>
-                <h2 className="chart-card-title">Fuel Efficiency Trends</h2>
-                <p className="chart-card-subtitle">Distance vs Fuel Consumption per Vehicle</p>
+          <div className="line-chart-container">
+            {hoveredData && (
+              <div className="chart-tooltip" style={{ left: `${hoveredData.x}px`, top: `${hoveredData.y - 45}px` }}>
+                <strong>{hoveredData.label}:</strong> {hoveredData.value} km/L
               </div>
-              <button className="btn-more-options" title="Chart Options">
-                <MoreVertical size={18} />
-              </button>
-            </div>
+            )}
 
-            <div className="line-chart-container">
-              {hoveredData && (
-                <div 
-                  className="chart-tooltip"
-                  style={{ left: `${hoveredData.x}px`, top: `${hoveredData.y - 45}px` }}
-                >
-                  <strong>{hoveredData.month}:</strong> {hoveredData.value} MPG ({hoveredData.series})
-                </div>
-              )}
+            <svg className="efficiency-svg" viewBox="0 0 650 300" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="lightFleetGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor="#000000" stopOpacity="0.08" />
+                  <stop offset="100%" stopColor="#000000" stopOpacity="0.0" />
+                </linearGradient>
+              </defs>
 
-              <svg className="efficiency-svg" viewBox="0 0 650 300" preserveAspectRatio="none">
-                <defs>
-                  <linearGradient id="lightFleetGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stopColor="#000000" stopOpacity="0.08" />
-                    <stop offset="100%" stopColor="#000000" stopOpacity="0.0" />
-                  </linearGradient>
-                </defs>
-
-                {/* Y-Axis Horizontal Grid Lines & Labels */}
-                {[20, 18, 16, 14, 12, 10, 8, 6].map((val, idx) => {
-                  const y = 30 + idx * 32;
-                  return (
-                    <g key={val}>
-                      <text x="25" y={y + 4} className="chart-axis-label text-right">{val}</text>
-                      <line x1="45" y1={y} x2="620" y2={y} className="chart-grid-line" />
-                    </g>
-                  );
-                })}
-
-                {/* X-Axis Labels */}
-                {[
-                  { month: 'Jan', x: 65 },
-                  { month: 'Feb', x: 170 },
-                  { month: 'Mar', x: 275 },
-                  { month: 'Apr', x: 380 },
-                  { month: 'May', x: 485 },
-                  { month: 'Jun', x: 590 }
-                ].map((item) => (
-                  <text key={item.month} x={item.x} y="280" className="chart-axis-label text-center">
-                    {item.month}
-                  </text>
-                ))}
-
-                {/* Light Fleet Area Fill */}
-                <path 
-                  d="M65,246.8 L170,242.0 L275,248.4 L380,237.2 L485,230.8 L590,235.6 L590,254 L65,254 Z" 
-                  fill="url(#lightFleetGrad)" 
-                />
-
-                {/* Heavy Fleet Dashed Line */}
-                <path 
-                  d="M65,60.4 C117.5,67 117.5,70 170,70 C222.5,70 222.5,58.8 275,58.8 C327.5,58.8 327.5,46 380,46 C432.5,46 432.5,54 485,54 C537.5,54 537.5,42.8 590,42.8" 
-                  fill="none" 
-                  stroke="#475569" 
-                  strokeWidth="2" 
-                  strokeDasharray="5 5"
-                />
-
-                {/* Light Fleet Solid Black Line */}
-                <path 
-                  d="M65,246.8 C117.5,244 117.5,242.0 170,242.0 C222.5,242.0 222.5,248.4 275,248.4 C327.5,248.4 327.5,237.2 380,237.2 C432.5,237.2 432.5,230.8 485,230.8 C537.5,230.8 537.5,235.6 590,235.6" 
-                  fill="none" 
-                  stroke="#000000" 
-                  strokeWidth="2.5"
-                />
-
-                {/* Data Points (Circles) - Heavy Fleet */}
-                {[
-                  { month: 'Jan', val: 18.1, x: 65, y: 60.4 },
-                  { month: 'Feb', val: 17.5, x: 170, y: 70 },
-                  { month: 'Mar', val: 18.2, x: 275, y: 58.8 },
-                  { month: 'Apr', val: 19.0, x: 380, y: 46 },
-                  { month: 'May', val: 18.5, x: 485, y: 54 },
-                  { month: 'Jun', val: 19.2, x: 590, y: 42.8 }
-                ].map((pt, idx) => (
-                  <circle 
-                    key={`heavy-${idx}`} 
-                    cx={pt.x} 
-                    cy={pt.y} 
-                    r="4.5" 
-                    className="chart-data-point heavy-pt"
-                    onMouseEnter={() => setHoveredData({ month: pt.month, value: pt.val, series: 'Heavy Fleet', x: pt.x, y: pt.y })}
-                    onMouseLeave={() => setHoveredData(null)}
-                  />
-                ))}
-
-                {/* Data Points (Circles) - Light Fleet */}
-                {[
-                  { month: 'Jan', val: 6.5, x: 65, y: 246.8 },
-                  { month: 'Feb', val: 6.8, x: 170, y: 242.0 },
-                  { month: 'Mar', val: 6.4, x: 275, y: 248.4 },
-                  { month: 'Apr', val: 7.1, x: 380, y: 237.2 },
-                  { month: 'May', val: 7.5, x: 485, y: 230.8 },
-                  { month: 'Jun', val: 7.2, x: 590, y: 235.6 }
-                ].map((pt, idx) => (
-                  <circle 
-                    key={`light-${idx}`} 
-                    cx={pt.x} 
-                    cy={pt.y} 
-                    r="4.5" 
-                    className="chart-data-point light-pt"
-                    onMouseEnter={() => setHoveredData({ month: pt.month, value: pt.val, series: 'Light Fleet', x: pt.x, y: pt.y })}
-                    onMouseLeave={() => setHoveredData(null)}
-                  />
-                ))}
-              </svg>
-
-              {/* Chart Legend */}
-              <div className="chart-legend-row">
-                <div className="legend-item">
-                  <span className="legend-dot dot-heavy"></span>
-                  <span className="legend-text">Heavy Fleet (MPG)</span>
-                </div>
-                <div className="legend-item">
-                  <span className="legend-dot dot-light"></span>
-                  <span className="legend-text">Light Fleet (MPG)</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Cost Breakdown Donut Chart Card */}
-          <div className="chart-card donut-card">
-            <div className="chart-card-header">
-              <div>
-                <h2 className="chart-card-title">Cost Breakdown</h2>
-                <p className="chart-card-subtitle">YTD Expenditure</p>
-              </div>
-            </div>
-
-            <div className="donut-content-wrapper">
-              <div className="donut-chart-box">
-                <svg className="donut-svg" viewBox="0 0 220 220">
-                  <g transform="rotate(-90 110 110)">
-                    {/* Fuel (45%) */}
-                    <circle 
-                      cx="110" 
-                      cy="110" 
-                      r="75" 
-                      fill="transparent" 
-                      stroke="#000000" 
-                      strokeWidth="28" 
-                      strokeDasharray="212.06 471.24"
-                      strokeDashoffset="0"
-                      className="donut-segment"
-                    />
-                    {/* Maintenance (35%) */}
-                    <circle 
-                      cx="110" 
-                      cy="110" 
-                      r="75" 
-                      fill="transparent" 
-                      stroke="#4A5568" 
-                      strokeWidth="28" 
-                      strokeDasharray="164.93 471.24"
-                      strokeDashoffset="-212.06"
-                      className="donut-segment"
-                    />
-                    {/* Others (20%) */}
-                    <circle 
-                      cx="110" 
-                      cy="110" 
-                      r="75" 
-                      fill="transparent" 
-                      stroke="#CBD5E1" 
-                      strokeWidth="28" 
-                      strokeDasharray="94.25 471.24"
-                      strokeDashoffset="-376.99"
-                      className="donut-segment"
-                    />
+              {/* Y-Axis Grid Lines & Labels */}
+              {[20, 18, 16, 14, 12, 10, 8, 6, 4, 2, 0].filter((_, i) => i % 2 === 0).map((val, idx) => {
+                const y = scaleY(val);
+                return (
+                  <g key={val}>
+                    <text x="25" y={y + 4} className="chart-axis-label text-right">{val}</text>
+                    <line x1="45" y1={y} x2="620" y2={y} className="chart-grid-line" />
                   </g>
+                );
+              })}
 
-                  {/* Center Text */}
-                  <text x="110" y="103" textAnchor="middle" className="donut-label-text">Total</text>
-                  <text x="110" y="128" textAnchor="middle" className="donut-total-text">$142K</text>
-                </svg>
-              </div>
+              {hasChartData ? (
+                <>
+                  {/* X-Axis Labels */}
+                  {chartVehicles.map((v, idx) => (
+                    <text key={idx} x={chartXPositions[idx]} y="280" className="chart-axis-label text-center" style={{ fontSize: 9 }}>
+                      {v.vehicleRegistration || `V${v.vehicleId}`}
+                    </text>
+                  ))}
 
-              {/* Donut Legend List */}
-              <div className="donut-legend-list">
-                <div className="donut-legend-item">
-                  <div className="donut-legend-label">
-                    <span className="donut-dot dot-fuel"></span>
-                    <span>Fuel</span>
-                  </div>
-                  <span className="donut-percentage">45%</span>
-                </div>
+                  {/* Line connecting points */}
+                  <path 
+                    d={chartVehicles.map((v, idx) => {
+                      const x = chartXPositions[idx];
+                      const y = scaleY(v.fuelEfficiency || 0);
+                      return `${idx === 0 ? 'M' : 'L'}${x},${y}`;
+                    }).join(' ')}
+                    fill="none" stroke="#000000" strokeWidth="2.5"
+                  />
 
-                <div className="donut-legend-item">
-                  <div className="donut-legend-label">
-                    <span className="donut-dot dot-maintenance"></span>
-                    <span>Maintenance</span>
-                  </div>
-                  <span className="donut-percentage">35%</span>
-                </div>
+                  {/* Data Points */}
+                  {chartVehicles.map((v, idx) => {
+                    const x = chartXPositions[idx];
+                    const y = scaleY(v.fuelEfficiency || 0);
+                    return (
+                      <circle 
+                        key={idx} cx={x} cy={y} r="4.5" 
+                        className="chart-data-point light-pt"
+                        onMouseEnter={() => setHoveredData({ label: v.vehicleRegistration || `Vehicle ${v.vehicleId}`, value: (v.fuelEfficiency || 0).toFixed(2), x, y })}
+                        onMouseLeave={() => setHoveredData(null)}
+                      />
+                    );
+                  })}
+                </>
+              ) : (
+                <text x="330" y="150" textAnchor="middle" className="chart-axis-label" style={{ fontSize: 13 }}>
+                  No fuel efficiency data yet
+                </text>
+              )}
+            </svg>
 
-                <div className="donut-legend-item">
-                  <div className="donut-legend-label">
-                    <span className="donut-dot dot-others"></span>
-                    <span>Others</span>
-                  </div>
-                  <span className="donut-percentage">20%</span>
-                </div>
+            <div className="chart-legend-row">
+              <div className="legend-item">
+                <span className="legend-dot dot-light"></span>
+                <span className="legend-text">Fuel Efficiency (km/L per Vehicle)</span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Bottom Vehicle ROI Heatmap Card */}
-        <div className="chart-card roi-card">
-          <div className="chart-card-header roi-header">
+        {/* Cost Breakdown Donut */}
+        <div className="chart-card donut-card">
+          <div className="chart-card-header">
             <div>
-              <h2 className="chart-card-title">Vehicle ROI Heatmap</h2>
-              <p className="chart-card-subtitle">Profitability vs Operating Costs by Unit</p>
-            </div>
-
-            <div className="roi-scale-legend">
-              <span className="roi-scale-label">Low ROI</span>
-              <div className="roi-scale-bar"></div>
-              <span className="roi-scale-label">High ROI</span>
+              <h2 className="chart-card-title">Cost Breakdown</h2>
+              <p className="chart-card-subtitle">YTD Expenditure</p>
             </div>
           </div>
 
-          <div className="table-responsive">
-            <table className="roi-table">
-              <thead>
-                <tr>
-                  <th>Vehicle ID</th>
-                  <th className="text-center">Q1</th>
-                  <th className="text-center">Q2</th>
-                  <th className="text-center">Q3</th>
-                  <th className="text-center">Q4</th>
-                  <th className="text-right">Trend</th>
-                </tr>
-              </thead>
-              <tbody>
-                {roiVehicles.map((veh) => (
-                  <tr key={veh.id} className="roi-row">
-                    <td>
-                      <div className="roi-vehicle-cell">
-                        <div className="roi-vehicle-icon">
-                          {getVehicleIcon(veh.type)}
-                        </div>
-                        <span className="roi-vehicle-id">{veh.id}</span>
-                      </div>
-                    </td>
-                    <td className="text-center">{getRoiBadge(veh.q1)}</td>
-                    <td className="text-center">{getRoiBadge(veh.q2)}</td>
-                    <td className="text-center">{getRoiBadge(veh.q3)}</td>
-                    <td className="text-center">{getRoiBadge(veh.q4)}</td>
-                    <td className="text-right">
-                      <span className="trend-icon-wrapper">
-                        {veh.trend === 'down' ? (
-                          <TrendingDown size={20} className="trend-down" strokeWidth={2.5} />
-                        ) : (
-                          <TrendingUp size={20} className="trend-up" strokeWidth={2.5} />
-                        )}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="donut-content-wrapper">
+            <div className="donut-chart-box">
+              <svg className="donut-svg" viewBox="0 0 220 220">
+                <g transform="rotate(-90 110 110)">
+                  {grandTotal > 0 ? (
+                    <>
+                      <circle cx="110" cy="110" r="75" fill="transparent" stroke="#000000" strokeWidth="28" 
+                        strokeDasharray={`${fuelArc} ${circumference}`} strokeDashoffset="0" className="donut-segment" />
+                      <circle cx="110" cy="110" r="75" fill="transparent" stroke="#4A5568" strokeWidth="28" 
+                        strokeDasharray={`${maintArc} ${circumference}`} strokeDashoffset={`${-fuelArc}`} className="donut-segment" />
+                      <circle cx="110" cy="110" r="75" fill="transparent" stroke="#CBD5E1" strokeWidth="28" 
+                        strokeDasharray={`${otherArc} ${circumference}`} strokeDashoffset={`${-(fuelArc + maintArc)}`} className="donut-segment" />
+                    </>
+                  ) : (
+                    <circle cx="110" cy="110" r="75" fill="transparent" stroke="#E2E8F0" strokeWidth="28" />
+                  )}
+                </g>
+                <text x="110" y="103" textAnchor="middle" className="donut-label-text">Total</text>
+                <text x="110" y="128" textAnchor="middle" className="donut-total-text">
+                  {grandTotal > 0 ? totalDisplay : '$0'}
+                </text>
+              </svg>
+            </div>
+
+            <div className="donut-legend-list">
+              <div className="donut-legend-item">
+                <div className="donut-legend-label">
+                  <span className="donut-dot dot-fuel"></span>
+                  <span>Fuel</span>
+                </div>
+                <span className="donut-percentage">{grandTotal > 0 ? `${fuelPct}%` : '--'}</span>
+              </div>
+              <div className="donut-legend-item">
+                <div className="donut-legend-label">
+                  <span className="donut-dot dot-maintenance"></span>
+                  <span>Maintenance</span>
+                </div>
+                <span className="donut-percentage">{grandTotal > 0 ? `${maintPct}%` : '--'}</span>
+              </div>
+              <div className="donut-legend-item">
+                <div className="donut-legend-label">
+                  <span className="donut-dot dot-others"></span>
+                  <span>Others</span>
+                </div>
+                <span className="donut-percentage">{grandTotal > 0 ? `${otherPct}%` : '--'}</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Vehicle ROI Heatmap */}
+      <div className="chart-card roi-card">
+        <div className="chart-card-header roi-header">
+          <div>
+            <h2 className="chart-card-title">Vehicle ROI</h2>
+            <p className="chart-card-subtitle">Return on Investment per Vehicle</p>
+          </div>
+          <div className="roi-scale-legend">
+            <span className="roi-scale-label">Low ROI</span>
+            <div className="roi-scale-bar"></div>
+            <span className="roi-scale-label">High ROI</span>
+          </div>
+        </div>
+
+        <div className="table-responsive">
+          <table className="roi-table">
+            <thead>
+              <tr>
+                <th>Vehicle</th>
+                <th className="text-center">Revenue ($)</th>
+                <th className="text-center">Total Cost ($)</th>
+                <th className="text-center">ROI</th>
+                <th className="text-right">Trend</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading && (
+                <tr>
+                  <td colSpan="5" style={{ textAlign: 'center', padding: '32px 0', color: '#6B7280' }}>
+                    <Loader2 size={20} className="spin-icon" style={{ display: 'inline-block', marginRight: 8 }} />
+                    Loading ROI data...
+                  </td>
+                </tr>
+              )}
+              {!loading && roiData.length === 0 && (
+                <tr>
+                  <td colSpan="5" style={{ textAlign: 'center', padding: '32px 0', color: '#6B7280', fontSize: 13 }}>
+                    No ROI data yet. Complete trips and log expenses to generate ROI reports.
+                  </td>
+                </tr>
+              )}
+              {!loading && roiData.map((veh) => (
+                <tr key={veh.vehicleId || veh.vehicleRegistration} className="roi-row">
+                  <td>
+                    <div className="roi-vehicle-cell">
+                      <div className="roi-vehicle-icon">
+                        {getVehicleIcon(veh.vehicleRegistration)}
+                      </div>
+                      <span className="roi-vehicle-id">{veh.vehicleRegistration || `Vehicle #${veh.vehicleId}`}</span>
+                    </div>
+                  </td>
+                  <td className="text-center">{veh.revenue != null ? `$${veh.revenue.toFixed(0)}` : '--'}</td>
+                  <td className="text-center">{veh.totalExpenses != null ? `$${veh.totalExpenses.toFixed(0)}` : '--'}</td>
+                  <td className="text-center">{getRoiBadge(veh.roi)}</td>
+                  <td className="text-right">
+                    <span className="trend-icon-wrapper">
+                      {(veh.roi || 0) >= 0 ? (
+                        <TrendingUp size={20} className="trend-up" strokeWidth={2.5} />
+                      ) : (
+                        <TrendingDown size={20} className="trend-down" strokeWidth={2.5} />
+                      )}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   );
 }

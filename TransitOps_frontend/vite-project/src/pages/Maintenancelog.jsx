@@ -1,81 +1,98 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-  Plus, 
-  Calendar, 
-  Wrench, 
-  CheckCircle2, 
-  Filter, 
-  ChevronLeft, 
-  ChevronRight, 
-  Truck, 
-  Bus, 
-  Car, 
-  MoreVertical,
-  X
+  Plus, Calendar, Wrench, CheckCircle2, Filter, ChevronLeft, ChevronRight, 
+  Truck, Bus, Car, MoreVertical, X, Loader2, AlertCircle
 } from 'lucide-react';
+import { maintenanceApi, vehiclesApi } from '../services/api';
 import './Maintenancelog.css';
 
 export default function Maintenancelog() {
-  const [records, setRecords] = useState([
-    {
-      id: 1,
-      vehicleId: 'TRK-8042',
-      type: 'Truck',
-      serviceType: 'Engine Repair',
-      date: 'Oct 24, 2023',
-      cost: 'Est. $1,250',
-      status: 'In Shop'
-    },
-    {
-      id: 2,
-      vehicleId: 'BUS-1109',
-      type: 'Bus',
-      serviceType: 'Routine Inspection',
-      date: 'Oct 26, 2023',
-      cost: '--',
-      status: 'Scheduled'
-    },
-    {
-      id: 3,
-      vehicleId: 'VAN-302',
-      type: 'Van',
-      serviceType: 'Oil Change & Tires',
-      date: 'Oct 20, 2023',
-      cost: '$450.00',
-      status: 'Completed'
-    },
-    {
-      id: 4,
-      vehicleId: 'TRK-8021',
-      type: 'Truck',
-      serviceType: 'Brake Replacement',
-      date: 'Oct 18, 2023',
-      cost: '$820.50',
-      status: 'Completed'
-    }
-  ]);
-
+  const [records, setRecords] = useState([]);
+  const [vehicles, setVehicles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [statusFilter, setStatusFilter] = useState('All');
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [formLoading, setFormLoading] = useState(false);
+  const [formError, setFormError] = useState(null);
+  const [closingId, setClosingId] = useState(null);
+
   const [newRecord, setNewRecord] = useState({
     vehicleId: '',
-    type: 'Truck',
-    serviceType: '',
-    date: 'Oct 28, 2023',
-    cost: '',
-    status: 'Scheduled'
+    title: '',
+    description: '',
+    maintenanceDate: new Date().toISOString().split('T')[0],
+    cost: ''
   });
 
-  const getVehicleIcon = (type) => {
-    switch (type?.toLowerCase()) {
-      case 'bus':
-        return <Bus size={18} className="vehicle-icon-svg" />;
-      case 'van':
-        return <Car size={18} className="vehicle-icon-svg" />;
-      default:
-        return <Truck size={18} className="vehicle-icon-svg" />;
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [maintenanceData, vehicleData] = await Promise.all([
+        maintenanceApi.getAll(),
+        vehiclesApi.getAll()
+      ]);
+      setRecords(Array.isArray(maintenanceData) ? maintenanceData : []);
+      setVehicles(Array.isArray(vehicleData) ? vehicleData : []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const handleAddRecord = async (e) => {
+    e.preventDefault();
+    if (!newRecord.vehicleId || !newRecord.title) return;
+    setFormLoading(true);
+    setFormError(null);
+    try {
+      await maintenanceApi.create({
+        vehicleId: parseInt(newRecord.vehicleId),
+        title: newRecord.title,
+        description: newRecord.description,
+        maintenanceDate: newRecord.maintenanceDate,
+        cost: parseFloat(newRecord.cost) || 0
+      });
+      setShowModal(false);
+      setNewRecord({ vehicleId: '', title: '', description: '', maintenanceDate: new Date().toISOString().split('T')[0], cost: '' });
+      fetchData();
+    } catch (err) {
+      setFormError(err.fieldErrors ? Object.values(err.fieldErrors).join(', ') : err.message);
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleClose = async (id) => {
+    setClosingId(id);
+    try {
+      await maintenanceApi.close(id);
+      fetchData();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setClosingId(null);
+    }
+  };
+
+  // Map API status to display status
+  const getDisplayStatus = (record) => {
+    if (record.status === 'CLOSED' || record.closedAt) return 'Completed';
+    return 'In Shop';
+  };
+
+  const getVehicleIcon = (regNumber) => {
+    const reg = (regNumber || '').toUpperCase();
+    if (reg.startsWith('BUS')) return <Bus size={18} className="vehicle-icon-svg" />;
+    if (reg.startsWith('VAN')) return <Car size={18} className="vehicle-icon-svg" />;
+    return <Truck size={18} className="vehicle-icon-svg" />;
   };
 
   const getStatusBadge = (status) => {
@@ -85,13 +102,6 @@ export default function Maintenancelog() {
           <span className="status-badge status-inshop">
             <Wrench size={13} strokeWidth={2.5} />
             In Shop
-          </span>
-        );
-      case 'Scheduled':
-        return (
-          <span className="status-badge status-scheduled">
-            <Calendar size={13} strokeWidth={2.5} />
-            Scheduled
           </span>
         );
       case 'Completed':
@@ -106,39 +116,27 @@ export default function Maintenancelog() {
     }
   };
 
-  const handleAddRecord = (e) => {
-    e.preventDefault();
-    if (!newRecord.vehicleId || !newRecord.serviceType) return;
-
-    const recordToAdd = {
-      id: Date.now(),
-      vehicleId: newRecord.vehicleId.toUpperCase(),
-      type: newRecord.type,
-      serviceType: newRecord.serviceType,
-      date: newRecord.date || 'Today',
-      cost: newRecord.cost ? (newRecord.cost.startsWith('$') || newRecord.cost.startsWith('Est') ? newRecord.cost : `$${newRecord.cost}`) : '--',
-      status: newRecord.status
+  // Compute display records from API data
+  const displayRecords = records.map(r => {
+    const vehicle = vehicles.find(v => v.id === r.vehicleId);
+    const displayStatus = getDisplayStatus(r);
+    return {
+      ...r,
+      vehicleRegNumber: vehicle?.registrationNumber || `Vehicle #${r.vehicleId}`,
+      vehicleType: vehicle?.type || 'Unknown',
+      displayStatus,
+      displayDate: r.maintenanceDate ? new Date(r.maintenanceDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '--',
+      displayCost: r.cost != null ? `$${r.cost.toFixed(2)}` : '--'
     };
-
-    setRecords([recordToAdd, ...records]);
-    setShowModal(false);
-    setNewRecord({
-      vehicleId: '',
-      type: 'Truck',
-      serviceType: '',
-      date: 'Oct 28, 2023',
-      cost: '',
-      status: 'Scheduled'
-    });
-  };
+  });
 
   const filteredRecords = statusFilter === 'All' 
-    ? records 
-    : records.filter(r => r.status === statusFilter);
+    ? displayRecords 
+    : displayRecords.filter(r => r.displayStatus === statusFilter);
 
-  const scheduledCount = records.filter(r => r.status === 'Scheduled').length + 11;
-  const inShopCount = records.filter(r => r.status === 'In Shop').length + 3;
-  const completedCount = records.filter(r => r.status === 'Completed').length + 26;
+  const inShopCount = displayRecords.filter(r => r.displayStatus === 'In Shop').length;
+  const completedCount = displayRecords.filter(r => r.displayStatus === 'Completed').length;
+  const totalCount = displayRecords.length;
 
   return (
     <>
@@ -152,23 +150,29 @@ export default function Maintenancelog() {
           <button 
             className="btn-log-maintenance" 
             id="open-log-modal-btn"
-            onClick={() => setShowModal(true)}
+            onClick={() => { setShowModal(true); setFormError(null); }}
           >
             <Plus size={18} strokeWidth={2.5} />
             Log Maintenance
           </button>
         </div>
 
+        {error && (
+          <div style={{ padding: '12px 16px', background: '#FEF2F2', color: '#DC2626', borderRadius: 8, marginBottom: 16, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <AlertCircle size={16} /> {error}
+          </div>
+        )}
+
         {/* 3 Summary Stat Cards */}
         <div className="stats-cards-grid">
-          <div className="stat-card" id="stat-card-scheduled">
+          <div className="stat-card" id="stat-card-total">
             <div className="stat-header">
               <div className="stat-icon-wrapper">
                 <Calendar size={20} className="stat-icon" />
               </div>
-              <span className="stat-label">Scheduled</span>
+              <span className="stat-label">Total Records</span>
             </div>
-            <div className="stat-value">{scheduledCount}</div>
+            <div className="stat-value">{loading ? '...' : totalCount}</div>
           </div>
 
           <div className="stat-card" id="stat-card-inshop">
@@ -178,7 +182,7 @@ export default function Maintenancelog() {
               </div>
               <span className="stat-label">In Shop</span>
             </div>
-            <div className="stat-value">{inShopCount}</div>
+            <div className="stat-value">{loading ? '...' : inShopCount}</div>
           </div>
 
           <div className="stat-card" id="stat-card-completed">
@@ -186,16 +190,16 @@ export default function Maintenancelog() {
               <div className="stat-icon-wrapper">
                 <CheckCircle2 size={20} className="stat-icon" />
               </div>
-              <span className="stat-label">Completed (30d)</span>
+              <span className="stat-label">Completed</span>
             </div>
-            <div className="stat-value">{completedCount}</div>
+            <div className="stat-value">{loading ? '...' : completedCount}</div>
           </div>
         </div>
 
         {/* Recent Records Card */}
         <div className="records-card" id="recent-records-section">
           <div className="records-card-header">
-            <h2 className="records-title">Recent Records</h2>
+            <h2 className="records-title">Maintenance Records</h2>
             <div className="filter-wrapper">
               <button 
                 className={`btn-filter-icon ${statusFilter !== 'All' ? 'active-filter' : ''}`}
@@ -209,7 +213,7 @@ export default function Maintenancelog() {
               {showFilterMenu && (
                 <div className="filter-dropdown">
                   <div className="filter-dropdown-title">Filter Status</div>
-                  {['All', 'In Shop', 'Scheduled', 'Completed'].map(status => (
+                  {['All', 'In Shop', 'Completed'].map(status => (
                     <button
                       key={status}
                       className={`filter-option ${statusFilter === status ? 'selected' : ''}`}
@@ -230,8 +234,8 @@ export default function Maintenancelog() {
             <table className="records-table">
               <thead>
                 <tr>
-                  <th>VEHICLE ID</th>
-                  <th>SERVICE TYPE</th>
+                  <th>VEHICLE</th>
+                  <th>TITLE</th>
                   <th>DATE</th>
                   <th>COST</th>
                   <th>STATUS</th>
@@ -239,47 +243,71 @@ export default function Maintenancelog() {
                 </tr>
               </thead>
               <tbody>
-                {filteredRecords.map((rec) => (
+                {loading && (
+                  <tr>
+                    <td colSpan="6" style={{ textAlign: 'center', padding: '32px 0', color: '#6B7280' }}>
+                      <Loader2 size={20} className="spin-icon" style={{ display: 'inline-block', marginRight: 8 }} />
+                      Loading records...
+                    </td>
+                  </tr>
+                )}
+                {!loading && filteredRecords.length === 0 && (
+                  <tr>
+                    <td colSpan="6" className="empty-state">
+                      {statusFilter !== 'All' 
+                        ? <>No records with status: <strong>{statusFilter}</strong></>
+                        : 'No maintenance records yet. Click "Log Maintenance" to create one.'
+                      }
+                    </td>
+                  </tr>
+                )}
+                {!loading && filteredRecords.map((rec) => (
                   <tr key={rec.id} className="table-row">
                     <td>
                       <div className="vehicle-id-cell">
                         <div className="vehicle-icon-box">
-                          {getVehicleIcon(rec.type)}
+                          {getVehicleIcon(rec.vehicleRegNumber)}
                         </div>
-                        <span className="vehicle-id-text">{rec.vehicleId}</span>
+                        <span className="vehicle-id-text">{rec.vehicleRegNumber}</span>
                       </div>
                     </td>
-                    <td className="service-type-cell">{rec.serviceType}</td>
-                    <td className="date-cell">{rec.date}</td>
-                    <td className="cost-cell">{rec.cost}</td>
-                    <td>{getStatusBadge(rec.status)}</td>
+                    <td className="service-type-cell">{rec.title}</td>
+                    <td className="date-cell">{rec.displayDate}</td>
+                    <td className="cost-cell">{rec.displayCost}</td>
+                    <td>{getStatusBadge(rec.displayStatus)}</td>
                     <td className="actions-cell text-right">
-                      <button className="btn-row-action" title="More Actions">
-                        <MoreVertical size={16} />
-                      </button>
+                      {rec.displayStatus === 'In Shop' && (
+                        <button 
+                          className="btn-row-action" 
+                          title="Close / Mark Complete"
+                          onClick={() => handleClose(rec.id)}
+                          disabled={closingId === rec.id}
+                          style={{ fontSize: 11, fontWeight: 600, padding: '4px 10px', border: '1px solid #D1D5DB', borderRadius: 6, background: '#fff', cursor: 'pointer' }}
+                        >
+                          {closingId === rec.id ? '...' : 'Close'}
+                        </button>
+                      )}
+                      {rec.displayStatus !== 'In Shop' && (
+                        <button className="btn-row-action" title="More Actions">
+                          <MoreVertical size={16} />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
-                {filteredRecords.length === 0 && (
-                  <tr>
-                    <td colSpan="6" className="empty-state">
-                      No maintenance records found for status: <strong>{statusFilter}</strong>
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
           </div>
 
           <div className="records-card-footer">
             <div className="pagination-info">
-              Showing {filteredRecords.length} of 42 records
+              Showing {filteredRecords.length} of {displayRecords.length} records
             </div>
             <div className="pagination-arrows">
               <button className="btn-pagination" disabled aria-label="Previous page">
                 <ChevronLeft size={16} />
               </button>
-              <button className="btn-pagination" aria-label="Next page">
+              <button className="btn-pagination" disabled aria-label="Next page">
                 <ChevronRight size={16} />
               </button>
             </div>
@@ -292,7 +320,7 @@ export default function Maintenancelog() {
         </div>
       </div>
 
-      
+      {/* Log Maintenance Modal */}
       {showModal && (
         <div className="modal-overlay">
           <div className="modal-card">
@@ -302,51 +330,49 @@ export default function Maintenancelog() {
                 <X size={20} />
               </button>
             </div>
+            {formError && (
+              <div style={{ padding: '8px 24px', color: '#DC2626', fontSize: 13 }}>{formError}</div>
+            )}
             <form onSubmit={handleAddRecord} className="modal-form">
               <div className="form-group">
-                <label>Vehicle ID</label>
-                <input 
-                  type="text" 
-                  placeholder="e.g. TRK-9104" 
+                <label>Vehicle</label>
+                <select 
                   value={newRecord.vehicleId}
                   onChange={(e) => setNewRecord({...newRecord, vehicleId: e.target.value})}
+                  required
+                >
+                  <option value="">Select a vehicle...</option>
+                  {vehicles.map(v => (
+                    <option key={v.id} value={v.id}>
+                      {v.registrationNumber} — {v.modelName} ({v.status})
+                    </option>
+                  ))}
+                </select>
+                {vehicles.length === 0 && !loading && (
+                  <span style={{ fontSize: 11, color: '#DC2626', marginTop: 4 }}>
+                    No vehicles registered. Add a vehicle first in the Directory.
+                  </span>
+                )}
+              </div>
+
+              <div className="form-group">
+                <label>Title</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. Engine Tune-up" 
+                  value={newRecord.title}
+                  onChange={(e) => setNewRecord({...newRecord, title: e.target.value})}
                   required 
                 />
               </div>
 
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Vehicle Type</label>
-                  <select 
-                    value={newRecord.type}
-                    onChange={(e) => setNewRecord({...newRecord, type: e.target.value})}
-                  >
-                    <option value="Truck">Truck</option>
-                    <option value="Bus">Bus</option>
-                    <option value="Van">Van</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Status</label>
-                  <select 
-                    value={newRecord.status}
-                    onChange={(e) => setNewRecord({...newRecord, status: e.target.value})}
-                  >
-                    <option value="Scheduled">Scheduled</option>
-                    <option value="In Shop">In Shop</option>
-                    <option value="Completed">Completed</option>
-                  </select>
-                </div>
-              </div>
-
               <div className="form-group">
-                <label>Service Type</label>
+                <label>Description</label>
                 <input 
                   type="text" 
-                  placeholder="e.g. Transmission Check, Oil Change" 
-                  value={newRecord.serviceType}
-                  onChange={(e) => setNewRecord({...newRecord, serviceType: e.target.value})}
-                  required 
+                  placeholder="e.g. Routine checkup and oil change" 
+                  value={newRecord.description}
+                  onChange={(e) => setNewRecord({...newRecord, description: e.target.value})}
                 />
               </div>
 
@@ -354,16 +380,18 @@ export default function Maintenancelog() {
                 <div className="form-group">
                   <label>Date</label>
                   <input 
-                    type="text" 
-                    value={newRecord.date}
-                    onChange={(e) => setNewRecord({...newRecord, date: e.target.value})}
+                    type="date" 
+                    value={newRecord.maintenanceDate}
+                    onChange={(e) => setNewRecord({...newRecord, maintenanceDate: e.target.value})}
+                    required
                   />
                 </div>
                 <div className="form-group">
-                  <label>Estimated Cost</label>
+                  <label>Cost ($)</label>
                   <input 
-                    type="text" 
-                    placeholder="e.g. Est. $650" 
+                    type="number" 
+                    step="0.01"
+                    placeholder="250.00" 
                     value={newRecord.cost}
                     onChange={(e) => setNewRecord({...newRecord, cost: e.target.value})}
                   />
@@ -374,8 +402,8 @@ export default function Maintenancelog() {
                 <button type="button" className="btn-modal-cancel" onClick={() => setShowModal(false)}>
                   Cancel
                 </button>
-                <button type="submit" className="btn-modal-submit">
-                  Save Record
+                <button type="submit" className="btn-modal-submit" disabled={formLoading}>
+                  {formLoading ? 'Saving...' : 'Save Record'}
                 </button>
               </div>
             </form>
