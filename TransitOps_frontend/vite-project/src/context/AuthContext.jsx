@@ -22,7 +22,10 @@ export function AuthProvider({ children }) {
       setUserState({ name: data.name, email: data.email, role: data.role });
       return data;
     } catch (err) {
-      setError(err.message || 'Login failed');
+      const msg = err.fieldErrors
+        ? Object.values(err.fieldErrors).join(', ')
+        : (err.message || 'Login failed');
+      setError(msg);
       throw err;
     } finally {
       setLoading(false);
@@ -40,7 +43,10 @@ export function AuthProvider({ children }) {
       setUserState({ name: data.name, email: data.email, role: data.role });
       return data;
     } catch (err) {
-      setError(err.message || 'Registration failed');
+      const msg = err.fieldErrors
+        ? Object.values(err.fieldErrors).join(', ')
+        : (err.message || 'Registration failed');
+      setError(msg);
       throw err;
     } finally {
       setLoading(false);

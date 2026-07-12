@@ -59,7 +59,15 @@ async function request(endpoint, options = {}) {
   const data = await res.json().catch(() => null);
 
   if (!res.ok) {
-    const error = new Error(data?.message || data?.error || `Request failed (${res.status})`);
+    // Build a meaningful message from the response
+    let message = data?.message || data?.error;
+    if (!message && data?.fieldErrors) {
+      message = Object.values(data.fieldErrors).join(', ');
+    }
+    if (!message) {
+      message = `Request failed (${res.status})`;
+    }
+    const error = new Error(message);
     error.status = res.status;
     error.fieldErrors = data?.fieldErrors || null;
     error.data = data;

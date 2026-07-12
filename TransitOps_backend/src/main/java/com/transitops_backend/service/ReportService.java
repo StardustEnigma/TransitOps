@@ -10,6 +10,9 @@ import com.transitops_backend.enums.TripStatus;
 import com.transitops_backend.enums.VehicleStatus;
 import com.transitops_backend.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import com.transitops_backend.exception.BusinessRuleException;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -30,7 +33,51 @@ public class ReportService {
 
     private static final BigDecimal REVENUE_RATE_PER_DISTANCE = BigDecimal.valueOf(2.50); // $2.50 per unit distance
 
+    private String getCurrentUserEmail() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null ? auth.getName() : null;
+    }
+
+    private boolean isCurrentUserDriver() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) return false;
+        return auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_DRIVER"));
+    }
+
     public DashboardKpiResponse getDashboardKpis() {
+        if (isCurrentUserDriver()) {
+            String email = getCurrentUserEmail();
+            Driver driver = driverRepository.findByEmail(email)
+                    .orElseThrow(() -> new BusinessRuleException("Driver profile not found for email: " + email));
+
+            long activeTrips = tripRepository.findByDriverId(driver.getId()).stream()
+                    .filter(t -> t.getStatus() == TripStatus.DISPATCHED)
+                    .count();
+
+            long pendingTrips = tripRepository.findByDriverId(driver.getId()).stream()
+                    .filter(t -> t.getStatus() == TripStatus.DRAFT)
+                    .count();
+
+            long activeVehicles = driver.getStatus() == DriverStatus.ON_TRIP ? 1 : 0;
+            long availableVehicles = driver.getStatus() == DriverStatus.AVAILABLE ? 1 : 0;
+            long driversOnDuty = (driver.getStatus() == DriverStatus.AVAILABLE || driver.getStatus() == DriverStatus.ON_TRIP) ? 1 : 0;
+
+            BigDecimal utilization = driver.getStatus() == DriverStatus.ON_TRIP
+                    ? BigDecimal.valueOf(100.00).setScale(2)
+                    : BigDecimal.ZERO.setScale(2);
+
+            return DashboardKpiResponse.builder()
+                    .activeVehicles(activeVehicles)
+                    .availableVehicles(availableVehicles)
+                    .vehiclesInMaintenance(0)
+                    .activeTrips(activeTrips)
+                    .pendingTrips(pendingTrips)
+                    .driversOnDuty(driversOnDuty)
+                    .fleetUtilization(utilization)
+                    .build();
+        }
+
         long activeVehicles = vehicleRepository.findByStatus(VehicleStatus.ON_TRIP).size();
         long availableVehicles = vehicleRepository.findByStatus(VehicleStatus.AVAILABLE).size();
         long vehiclesInMaintenance = vehicleRepository.findByStatus(VehicleStatus.IN_SHOP).size();

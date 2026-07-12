@@ -11,6 +11,9 @@ import com.transitops_backend.repository.ExpenseRepository;
 import com.transitops_backend.repository.TripRepository;
 import com.transitops_backend.repository.VehicleRepository;
 import lombok.RequiredArgsConstructor;
+import com.transitops_backend.exception.BusinessRuleException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,19 +28,52 @@ public class ExpenseService {
     private final VehicleRepository vehicleRepository;
     private final TripRepository tripRepository;
 
+    private String getCurrentUserEmail() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null ? auth.getName() : null;
+    }
+
+    private boolean isCurrentUserDriver() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) return false;
+        return auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_DRIVER"));
+    }
+
     public List<ExpenseResponse> getAllExpenses() {
+        if (isCurrentUserDriver()) {
+            String email = getCurrentUserEmail();
+            return expenseRepository.findAll().stream()
+                    .filter(e -> e.getTrip() != null && e.getTrip().getDriver() != null && email.equals(e.getTrip().getDriver().getEmail()))
+                    .map(this::toResponse)
+                    .collect(Collectors.toList());
+        }
         return expenseRepository.findAll().stream()
                 .map(this::toResponse)
                 .collect(Collectors.toList());
     }
 
     public List<ExpenseResponse> getByVehicleId(Long vehicleId) {
+        if (isCurrentUserDriver()) {
+            String email = getCurrentUserEmail();
+            return expenseRepository.findByVehicleId(vehicleId).stream()
+                    .filter(e -> e.getTrip() != null && e.getTrip().getDriver() != null && email.equals(e.getTrip().getDriver().getEmail()))
+                    .map(this::toResponse)
+                    .collect(Collectors.toList());
+        }
         return expenseRepository.findByVehicleId(vehicleId).stream()
                 .map(this::toResponse)
                 .collect(Collectors.toList());
     }
 
     public List<ExpenseResponse> getByType(ExpenseType type) {
+        if (isCurrentUserDriver()) {
+            String email = getCurrentUserEmail();
+            return expenseRepository.findByExpenseType(type).stream()
+                    .filter(e -> e.getTrip() != null && e.getTrip().getDriver() != null && email.equals(e.getTrip().getDriver().getEmail()))
+                    .map(this::toResponse)
+                    .collect(Collectors.toList());
+        }
         return expenseRepository.findByExpenseType(type).stream()
                 .map(this::toResponse)
                 .collect(Collectors.toList());
@@ -46,6 +82,12 @@ public class ExpenseService {
     public ExpenseResponse getById(Long id) {
         Expense expense = expenseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Expense", "id", id));
+        if (isCurrentUserDriver()) {
+            String email = getCurrentUserEmail();
+            if (expense.getTrip() == null || expense.getTrip().getDriver() == null || !email.equals(expense.getTrip().getDriver().getEmail())) {
+                throw new BusinessRuleException("Access denied: This expense does not belong to your trips.");
+            }
+        }
         return toResponse(expense);
     }
 
@@ -58,6 +100,13 @@ public class ExpenseService {
         if (request.getTripId() != null) {
             trip = tripRepository.findById(request.getTripId())
                     .orElseThrow(() -> new ResourceNotFoundException("Trip", "id", request.getTripId()));
+        }
+
+        if (isCurrentUserDriver()) {
+            String email = getCurrentUserEmail();
+            if (trip == null || trip.getDriver() == null || !email.equals(trip.getDriver().getEmail())) {
+                throw new BusinessRuleException("Access denied: You can only log expenses for your own assigned trips.");
+            }
         }
 
         ExpenseType expenseType = ExpenseType.valueOf(request.getExpenseType().toUpperCase());

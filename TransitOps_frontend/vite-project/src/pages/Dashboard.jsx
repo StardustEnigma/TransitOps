@@ -4,14 +4,17 @@ import {
   Car, CheckCircle, Wrench, Route, Clock, UserCheck, PieChart,
   ArrowRight, Loader2, AlertCircle
 } from 'lucide-react';
-import { dashboardApi, tripsApi, vehiclesApi } from '../services/api';
+import { dashboardApi, tripsApi, vehiclesApi, expensesApi } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import './Dashboard.css';
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [kpis, setKpis] = useState(null);
   const [trips, setTrips] = useState([]);
   const [vehicles, setVehicles] = useState([]);
+  const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -27,7 +30,8 @@ export default function Dashboard() {
       const results = await Promise.allSettled([
         dashboardApi.getKpis(),
         tripsApi.getAll(),
-        vehiclesApi.getAll()
+        vehiclesApi.getAll(),
+        expensesApi.getAll()
       ]);
 
       if (results[0].status === 'fulfilled') {
@@ -38,6 +42,9 @@ export default function Dashboard() {
       }
       if (results[2].status === 'fulfilled') {
         setVehicles(Array.isArray(results[2].value) ? results[2].value : []);
+      }
+      if (results[3].status === 'fulfilled') {
+        setExpenses(Array.isArray(results[3].value) ? results[3].value : []);
       }
     } catch (err) {
       setError(err.message);
@@ -55,7 +62,38 @@ export default function Dashboard() {
   const activeTrips = trips.filter(t => t.status === 'DISPATCHED').length;
   const pendingTrips = trips.filter(t => t.status === 'DRAFT').length;
 
-  const stats = [
+  const isDriver = user?.role === 'DRIVER';
+  const driverCompletedTrips = trips.filter(t => t.status === 'COMPLETED').length;
+  const driverTotalDistance = trips.filter(t => t.status === 'COMPLETED' && t.actualDistance != null).reduce((sum, t) => sum + t.actualDistance, 0);
+  const driverTotalCost = expenses.reduce((sum, e) => sum + e.amount, 0);
+
+  const stats = isDriver ? [
+    { 
+      title: 'YOUR ACTIVE TRIPS', icon: Route, 
+      value: activeTrips, 
+      trend: 'Currently in transit'
+    },
+    { 
+      title: 'YOUR PENDING TRIPS', icon: Clock, 
+      value: pendingTrips, 
+      trend: 'Awaiting dispatch'
+    },
+    { 
+      title: 'YOUR COMPLETED TRIPS', icon: CheckCircle, 
+      value: driverCompletedTrips, 
+      trend: 'Successfully delivered'
+    },
+    { 
+      title: 'TOTAL DISTANCE TRAVELED', icon: Car, 
+      value: `${driverTotalDistance.toFixed(1)} km`, 
+      trend: 'Across completed trips'
+    },
+    { 
+      title: 'TOTAL OPERATIONAL COST', icon: PieChart, 
+      value: `$${driverTotalCost.toFixed(2)}`, 
+      trend: 'Expenses logged by you'
+    }
+  ] : [
     { 
       title: 'ACTIVE VEHICLES', icon: Car, 
       value: kpis?.activeVehicles ?? onTripVehicles, 
@@ -153,39 +191,65 @@ export default function Dashboard() {
 
       <div className="bottom-sections">
         {/* Fleet Status Chart */}
-        <div className="fleet-status-card">
-          <h2 className="card-title">Fleet Status</h2>
-          
-          <div className="donut-chart-container">
-            <div className="donut-chart" style={donutStyle}>
-              <div className="donut-inner">
-                <span className="donut-value">{loading ? '...' : totalVehicles}</span>
-                <span className="donut-label">Total Units</span>
-              </div>
+        {/* Fleet Status Chart or Driver Expenses */}
+        {isDriver ? (
+          <div className="fleet-status-card">
+            <h2 className="card-title">Recent Expenses Logged</h2>
+            <div className="driver-expenses-list" style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '16px' }}>
+              {expenses.slice(0, 5).map((e, idx) => (
+                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                  <div>
+                    <span style={{ fontWeight: '600', fontSize: '13px', color: '#1E293B', display: 'block' }}>{e.expenseType.replace('_', ' ')}</span>
+                    <span style={{ color: '#64748B', fontSize: '11px', display: 'block', marginTop: '2px' }}>{e.description || 'No description'}</span>
+                    <span style={{ color: '#94A3B8', fontSize: '10px' }}>Trip TRP-{e.tripId} — {e.expenseDate}</span>
+                  </div>
+                  <div style={{ fontWeight: '700', fontSize: '14px', color: '#0F172A' }}>
+                    ${e.amount.toFixed(2)}
+                  </div>
+                </div>
+              ))}
+              {expenses.length === 0 && !loading && (
+                <div style={{ textAlign: 'center', color: '#64748B', padding: '32px 0', fontSize: '13px' }}>
+                  No expenses logged yet.
+                </div>
+              )}
             </div>
           </div>
+        ) : (
+          <div className="fleet-status-card">
+            <h2 className="card-title">Fleet Status</h2>
+            
+            <div className="donut-chart-container">
+              <div className="donut-chart" style={donutStyle}>
+                <div className="donut-inner">
+                  <span className="donut-value">{loading ? '...' : totalVehicles}</span>
+                  <span className="donut-label">Total Units</span>
+                </div>
+              </div>
+            </div>
 
-          <div className="chart-legend">
-            <div className="legend-item">
-              <div className="legend-label">
-                <span className="dot dot-black"></span> On Trip
+            <div className="chart-legend">
+              <div className="legend-item">
+                <div className="legend-label">
+                  <span className="dot dot-black"></span> On Trip
+                </div>
+                <span className="legend-value">{totalVehicles > 0 ? `${((onTripVehicles / nonRetired) * 100).toFixed(0)}%` : '0%'}</span>
               </div>
-              <span className="legend-value">{totalVehicles > 0 ? `${((onTripVehicles / nonRetired) * 100).toFixed(0)}%` : '0%'}</span>
-            </div>
-            <div className="legend-item">
-              <div className="legend-label">
-                <span className="dot dot-blue"></span> Available
+              <div className="legend-item">
+                <div className="legend-label">
+                  <span className="dot dot-blue"></span> Available
+                </div>
+                <span className="legend-value">{totalVehicles > 0 ? `${((availableVehicles / nonRetired) * 100).toFixed(0)}%` : '0%'}</span>
               </div>
-              <span className="legend-value">{totalVehicles > 0 ? `${((availableVehicles / nonRetired) * 100).toFixed(0)}%` : '0%'}</span>
-            </div>
-            <div className="legend-item">
-              <div className="legend-label">
-                <span className="dot dot-red"></span> Maintenance
+              <div className="legend-item">
+                <div className="legend-label">
+                  <span className="dot dot-red"></span> Maintenance
+                </div>
+                <span className="legend-value">{totalVehicles > 0 ? `${((inShopVehicles / nonRetired) * 100).toFixed(0)}%` : '0%'}</span>
               </div>
-              <span className="legend-value">{totalVehicles > 0 ? `${((inShopVehicles / nonRetired) * 100).toFixed(0)}%` : '0%'}</span>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Recent Trip History */}
         <div className="recent-trips-card">

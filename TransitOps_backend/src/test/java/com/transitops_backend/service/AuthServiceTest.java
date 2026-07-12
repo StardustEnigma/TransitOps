@@ -19,7 +19,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import java.util.Collections;
 import java.util.Optional;
+
+import com.transitops_backend.repository.DriverRepository;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -39,6 +46,9 @@ public class AuthServiceTest {
 
     @Mock
     private JwtService jwtService;
+
+    @Mock
+    private DriverRepository driverRepository;
 
     @InjectMocks
     private AuthService authService;
@@ -100,13 +110,7 @@ public class AuthServiceTest {
         verify(userRepository).save(any(User.class));
     }
 
-    @Test
-    void register_ThrowsException_WhenRoleNotSelfRegisterable() {
-        RegisterRequest request = new RegisterRequest("Alice", "alice@test.com", "password", "FLEET_MANAGER");
 
-        assertThrows(BusinessRuleException.class, () -> authService.register(request));
-        verify(userRepository, never()).save(any(User.class));
-    }
 
     @Test
     void register_ThrowsException_WhenEmailExists() {
@@ -190,4 +194,6 @@ public class AuthServiceTest {
 
         assertThrows(BusinessRuleException.class, () -> authService.login(request));
     }
+
+
 }

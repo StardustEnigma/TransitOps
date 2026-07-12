@@ -21,7 +21,7 @@ public class ExpenseController {
     private final ExpenseService expenseService;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('FLEET_MANAGER', 'FINANCIAL_ANALYST')")
+    @PreAuthorize("hasAnyRole('FLEET_MANAGER', 'FINANCIAL_ANALYST', 'DRIVER')")
     public ResponseEntity<List<ExpenseResponse>> getAll(
             @RequestParam(required = false) Long vehicleId,
             @RequestParam(required = false) ExpenseType type) {
@@ -34,13 +34,13 @@ public class ExpenseController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('FLEET_MANAGER', 'FINANCIAL_ANALYST')")
+    @PreAuthorize("hasAnyRole('FLEET_MANAGER', 'FINANCIAL_ANALYST', 'DRIVER')")
     public ResponseEntity<ExpenseResponse> getById(@PathVariable Long id) {
         return ResponseEntity.ok(expenseService.getById(id));
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('FLEET_MANAGER')")
+    @PreAuthorize("hasAnyRole('FLEET_MANAGER', 'DRIVER')")
     public ResponseEntity<ExpenseResponse> create(@Valid @RequestBody ExpenseRequest request) {
         ExpenseResponse response = expenseService.createExpense(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);

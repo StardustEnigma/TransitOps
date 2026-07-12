@@ -6,7 +6,8 @@ import {
   User, MapPin, Clock, AlertTriangle, PlusCircle, Maximize2,
   CheckCircle, XCircle, Loader2, AlertCircle, Truck, Package, Send
 } from 'lucide-react';
-import { tripsApi, vehiclesApi, driversApi } from '../services/api';
+import { tripsApi, vehiclesApi, driversApi, expensesApi } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import './Dispatch.css';
 
 // Fix for default Leaflet markers in React
@@ -89,6 +90,9 @@ const CityAutocomplete = ({ value, onChange, placeholder }) => {
 
 export default function Dispatch() {
   const mapCenter = [21.1702, 72.8311];
+  const { user } = useAuth();
+  const isDriver = user?.role === 'DRIVER';
+  const isManager = user?.role === 'FLEET_MANAGER';
 
   const [trips, setTrips] = useState([]);
   const [vehicles, setVehicles] = useState([]);
@@ -99,10 +103,19 @@ export default function Dispatch() {
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState(null);
   const [showCompleteModal, setShowCompleteModal] = useState(null);
+  const [showExpenseModal, setShowExpenseModal] = useState(null);
   const [actualDistance, setActualDistance] = useState('');
   const [routeCache, setRouteCache] = useState({});
   const [activeRoutes, setActiveRoutes] = useState({});
   const [animationStep, setAnimationStep] = useState({});
+
+  // New expense form
+  const [expenseForm, setExpenseForm] = useState({
+    expenseType: 'TOLL',
+    amount: '',
+    description: '',
+    expenseDate: new Date().toISOString().split('T')[0]
+  });
 
   // New trip form
   const [tripForm, setTripForm] = useState({
@@ -272,6 +285,35 @@ export default function Dispatch() {
     }
   };
 
+  const handleAddExpense = async (e) => {
+    e.preventDefault();
+    if (!showExpenseModal) return;
+    setFormLoading(true);
+    setFormError(null);
+    try {
+      await expensesApi.create({
+        vehicleId: showExpenseModal.vehicleId || showExpenseModal.vehicle?.id,
+        tripId: showExpenseModal.id,
+        expenseType: expenseForm.expenseType,
+        amount: parseFloat(expenseForm.amount) || 0,
+        description: expenseForm.description,
+        expenseDate: expenseForm.expenseDate
+      });
+      setShowExpenseModal(null);
+      setExpenseForm({
+        expenseType: 'TOLL',
+        amount: '',
+        description: '',
+        expenseDate: new Date().toISOString().split('T')[0]
+      });
+      fetchData();
+    } catch (err) {
+      setFormError(err.fieldErrors ? Object.values(err.fieldErrors).join(', ') : err.message);
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
   const getStatusBadge = (status) => {
     switch (status) {
       case 'DISPATCHED': return 'normal';
@@ -383,7 +425,7 @@ export default function Dispatch() {
 
                 {/* Action buttons */}
                 <div className="trip-card-actions">
-                  {trip.status === 'DRAFT' && (
+                  {trip.status === 'DRAFT' && !isDriver && (
                     <button
                       className="trip-action-btn btn-dispatch"
                       onClick={() => handleDispatchDraft(trip.id)}
@@ -394,15 +436,24 @@ export default function Dispatch() {
                     </button>
                   )}
                   {trip.status === 'DISPATCHED' && (
-                    <button
-                      className="trip-action-btn btn-complete"
-                      onClick={() => { setShowCompleteModal(trip.id); setActualDistance(''); }}
-                      disabled={actionLoading === trip.id}
-                    >
-                      <CheckCircle size={13} /> Complete
-                    </button>
+                    <>
+                      <button
+                        className="trip-action-btn btn-complete"
+                        onClick={() => { setShowCompleteModal(trip.id); setActualDistance(''); }}
+                        disabled={actionLoading === trip.id}
+                      >
+                        <CheckCircle size={13} /> Complete
+                      </button>
+                      <button
+                        className="trip-action-btn btn-expense"
+                        onClick={() => { setShowExpenseModal(trip); setFormError(null); }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: '#2563eb', color: '#ffffff' }}
+                      >
+                        <PlusCircle size={13} /> Expense
+                      </button>
+                    </>
                   )}
-                  {(trip.status === 'DRAFT' || trip.status === 'DISPATCHED') && (
+                  {(trip.status === 'DRAFT' || trip.status === 'DISPATCHED') && !isDriver && (
                     <button
                       className="trip-action-btn btn-cancel"
                       onClick={() => handleCancel(trip.id)}
@@ -418,103 +469,105 @@ export default function Dispatch() {
           </div>
 
           {/* New Trip Creator */}
-          <div className="new-trip-creator">
-            <div className="creator-header">
-              <PlusCircle size={18} className="text-blue" />
-              <h3>New Trip — Create & Dispatch</h3>
+          {!isDriver && (
+            <div className="new-trip-creator">
+              <div className="creator-header">
+                <PlusCircle size={18} className="text-blue" />
+                <h3>New Trip — Create & Dispatch</h3>
+              </div>
+
+              {formError && (
+                <div className="form-error-banner">
+                  <AlertCircle size={14} /> {formError}
+                </div>
+              )}
+
+              <form onSubmit={handleCreateAndDispatch}>
+                <div className="creator-section">
+                  <label>Route</label>
+                  <div className="input-with-icon">
+                    <MapPin size={14} className="input-icon" style={{ zIndex: 2 }} />
+                    <CityAutocomplete
+                      placeholder="Origin (e.g. Mumbai)"
+                      value={tripForm.source}
+                      onChange={(val) => setTripForm({...tripForm, source: val})}
+                    />
+                  </div>
+                  <div className="input-with-icon">
+                    <MapPin size={14} className="input-icon" style={{ zIndex: 2 }} />
+                    <CityAutocomplete
+                      placeholder="Destination (e.g. Pune)"
+                      value={tripForm.destination}
+                      onChange={(val) => setTripForm({...tripForm, destination: val})}
+                    />
+                  </div>
+                </div>
+
+                <div className="creator-section">
+                  <label>Assign Assets</label>
+                  <select
+                    value={tripForm.driverId}
+                    onChange={(e) => setTripForm({...tripForm, driverId: e.target.value})}
+                    required
+                  >
+                    <option value="">Select driver...</option>
+                    {availableDrivers.map(d => (
+                      <option key={d.id} value={d.id}>
+                        {d.name} — {d.licenseCategory} (Score: {d.safetyScore})
+                      </option>
+                    ))}
+                  </select>
+                  {availableDrivers.length === 0 && !loading && (
+                    <span className="form-hint-error">No available drivers</span>
+                  )}
+
+                  <select
+                    value={tripForm.vehicleId}
+                    onChange={(e) => setTripForm({...tripForm, vehicleId: e.target.value})}
+                    required
+                  >
+                    <option value="">Select vehicle...</option>
+                    {availableVehicles.map(v => (
+                      <option key={v.id} value={v.id}>
+                        {v.registrationNumber} — {v.modelName} (Max: {v.maxLoadCapacity}kg)
+                      </option>
+                    ))}
+                  </select>
+                  {availableVehicles.length === 0 && !loading && (
+                    <span className="form-hint-error">No available vehicles</span>
+                  )}
+                </div>
+
+                <div className="creator-section">
+                  <label>Cargo & Distance</label>
+                  <div className="form-row-inline">
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="Cargo weight (kg)"
+                      value={tripForm.cargoWeight}
+                      onChange={(e) => setTripForm({...tripForm, cargoWeight: e.target.value})}
+                    />
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="Planned distance (km)"
+                      value={tripForm.plannedDistance}
+                      onChange={(e) => setTripForm({...tripForm, plannedDistance: e.target.value})}
+                    />
+                  </div>
+                </div>
+
+                <button type="submit" className="create-dispatch-btn" disabled={formLoading}>
+                  {formLoading ? (
+                    <><Loader2 size={16} className="spin-icon" /> Creating...</>
+                  ) : (
+                    <><Send size={16} /> Create & Dispatch</>
+                  )}
+                </button>
+              </form>
             </div>
-
-            {formError && (
-              <div className="form-error-banner">
-                <AlertCircle size={14} /> {formError}
-              </div>
-            )}
-
-            <form onSubmit={handleCreateAndDispatch}>
-              <div className="creator-section">
-                <label>Route</label>
-                <div className="input-with-icon">
-                  <MapPin size={14} className="input-icon" style={{ zIndex: 2 }} />
-                  <CityAutocomplete
-                    placeholder="Origin (e.g. Mumbai)"
-                    value={tripForm.source}
-                    onChange={(val) => setTripForm({...tripForm, source: val})}
-                  />
-                </div>
-                <div className="input-with-icon">
-                  <MapPin size={14} className="input-icon" style={{ zIndex: 2 }} />
-                  <CityAutocomplete
-                    placeholder="Destination (e.g. Pune)"
-                    value={tripForm.destination}
-                    onChange={(val) => setTripForm({...tripForm, destination: val})}
-                  />
-                </div>
-              </div>
-
-              <div className="creator-section">
-                <label>Assign Assets</label>
-                <select
-                  value={tripForm.driverId}
-                  onChange={(e) => setTripForm({...tripForm, driverId: e.target.value})}
-                  required
-                >
-                  <option value="">Select driver...</option>
-                  {availableDrivers.map(d => (
-                    <option key={d.id} value={d.id}>
-                      {d.name} — {d.licenseCategory} (Score: {d.safetyScore})
-                    </option>
-                  ))}
-                </select>
-                {availableDrivers.length === 0 && !loading && (
-                  <span className="form-hint-error">No available drivers</span>
-                )}
-
-                <select
-                  value={tripForm.vehicleId}
-                  onChange={(e) => setTripForm({...tripForm, vehicleId: e.target.value})}
-                  required
-                >
-                  <option value="">Select vehicle...</option>
-                  {availableVehicles.map(v => (
-                    <option key={v.id} value={v.id}>
-                      {v.registrationNumber} — {v.modelName} (Max: {v.maxLoadCapacity}kg)
-                    </option>
-                  ))}
-                </select>
-                {availableVehicles.length === 0 && !loading && (
-                  <span className="form-hint-error">No available vehicles</span>
-                )}
-              </div>
-
-              <div className="creator-section">
-                <label>Cargo & Distance</label>
-                <div className="form-row-inline">
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="Cargo weight (kg)"
-                    value={tripForm.cargoWeight}
-                    onChange={(e) => setTripForm({...tripForm, cargoWeight: e.target.value})}
-                  />
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="Planned distance (km)"
-                    value={tripForm.plannedDistance}
-                    onChange={(e) => setTripForm({...tripForm, plannedDistance: e.target.value})}
-                  />
-                </div>
-              </div>
-
-              <button type="submit" className="create-dispatch-btn" disabled={formLoading}>
-                {formLoading ? (
-                  <><Loader2 size={16} className="spin-icon" /> Creating...</>
-                ) : (
-                  <><Send size={16} /> Create & Dispatch</>
-                )}
-              </button>
-            </form>
-          </div>
+          )}
         </div>
       </div>
 
@@ -549,6 +602,74 @@ export default function Dispatch() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Log Expense Modal */}
+      {showExpenseModal && (
+        <div className="modal-overlay" onClick={() => setShowExpenseModal(null)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Log Expense — TRP-{showExpenseModal.id}</h3>
+              <button className="btn-close-modal" onClick={() => setShowExpenseModal(null)}>×</button>
+            </div>
+            {formError && <div className="form-error-banner">{formError}</div>}
+            <form onSubmit={handleAddExpense} className="modal-form">
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Expense Type</label>
+                  <select
+                    value={expenseForm.expenseType}
+                    onChange={(e) => setExpenseForm({...expenseForm, expenseType: e.target.value})}
+                    required
+                  >
+                    <option value="TOLL">Toll Gate Fee</option>
+                    <option value="PARKING">Parking Fee</option>
+                    <option value="FUEL">Fuel Top-up</option>
+                    <option value="REPAIR">Repair</option>
+                    <option value="MAINTENANCE">Maintenance</option>
+                    <option value="OTHER">Other Expense</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Amount ($)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="e.g. 15.00"
+                    value={expenseForm.amount}
+                    onChange={(e) => setExpenseForm({...expenseForm, amount: e.target.value})}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Description</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Expressway Toll"
+                  value={expenseForm.description}
+                  onChange={(e) => setExpenseForm({...expenseForm, description: e.target.value})}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>Expense Date</label>
+                <input
+                  type="date"
+                  value={expenseForm.expenseDate}
+                  onChange={(e) => setExpenseForm({...expenseForm, expenseDate: e.target.value})}
+                  required
+                />
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="btn-modal-cancel" onClick={() => setShowExpenseModal(null)}>Cancel</button>
+                <button type="submit" className="btn-modal-submit" disabled={formLoading}>
+                  {formLoading ? 'Logging...' : 'Save Expense'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

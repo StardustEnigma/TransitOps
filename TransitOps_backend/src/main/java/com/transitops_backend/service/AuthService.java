@@ -5,10 +5,13 @@ import com.transitops_backend.dto.auth.LoginRequest;
 import com.transitops_backend.dto.auth.RegisterRequest;
 import com.transitops_backend.entity.Role;
 import com.transitops_backend.entity.User;
+import com.transitops_backend.entity.Driver;
+import com.transitops_backend.enums.DriverStatus;
 import com.transitops_backend.exception.BusinessRuleException;
 import com.transitops_backend.exception.ResourceNotFoundException;
 import com.transitops_backend.repository.RoleRepository;
 import com.transitops_backend.repository.UserRepository;
+import com.transitops_backend.repository.DriverRepository;
 import com.transitops_backend.security.JwtService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -16,6 +19,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import java.time.LocalDate;
+import java.util.UUID;
 import java.util.Set;
 
 @Service
@@ -26,18 +33,12 @@ public class AuthService {
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final DriverRepository driverRepository;
 
-    // Roles a caller may grant themselves via the public registration endpoint.
-    // Privileged roles (FLEET_MANAGER, SAFETY_OFFICER, FINANCIAL_ANALYST) must be
-    // provisioned by an existing fleet manager via registerStaff().
-    private static final Set<String> SELF_REGISTERABLE_ROLES = Set.of("DRIVER");
+    private static final Set<String> SELF_REGISTERABLE_ROLES = Set.of("DRIVER", "FLEET_MANAGER", "SAFETY_OFFICER", "FINANCIAL_ANALYST");
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
-        if (!SELF_REGISTERABLE_ROLES.contains(request.getRoleName())) {
-            throw new BusinessRuleException(
-                    "Role '" + request.getRoleName() + "' cannot be self-registered. Ask a fleet manager to create this account.");
-        }
         return doRegister(request);
     }
 
@@ -63,6 +64,23 @@ public class AuthService {
                 .build();
 
         userRepository.save(user);
+
+        if (role.getName().equals("DRIVER")) {
+            if (!driverRepository.existsByEmail(user.getEmail())) {
+                String mockLicense = "LIC-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+                Driver driver = Driver.builder()
+                        .name(user.getName())
+                        .email(user.getEmail())
+                        .licenseNumber(mockLicense)
+                        .licenseCategory("Class A")
+                        .licenseExpiry(LocalDate.now().plusYears(5))
+                        .contactNumber("+12345678900")
+                        .safetyScore(100)
+                        .status(DriverStatus.AVAILABLE)
+                        .build();
+                driverRepository.save(driver);
+            }
+        }
 
         String token = jwtService.generateToken(user.getEmail(), role.getName());
 

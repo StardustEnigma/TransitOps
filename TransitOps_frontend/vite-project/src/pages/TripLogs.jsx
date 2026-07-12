@@ -5,9 +5,12 @@ import {
   Fuel, Plus, X
 } from 'lucide-react';
 import { tripsApi, fuelApi, expensesApi } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import './TripLogs.css';
 
 export default function TripLogs() {
+  const { user } = useAuth();
+  const isDriver = user?.role === 'DRIVER';
   const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -122,6 +125,7 @@ export default function TripLogs() {
       } else {
         await expensesApi.create({
           vehicleId: trip.vehicleId,
+          tripId: trip.id,
           expenseType: expenseForm.type,
           amount: parseFloat(expenseForm.amount) || 0,
           description: expenseForm.description,
@@ -256,7 +260,7 @@ export default function TripLogs() {
                 <td className="tl-date-cell">{formatDate(trip.createdAt)}</td>
                 <td className="text-right">
                   <div className="tl-actions">
-                    {trip.status === 'DRAFT' && (
+                    {trip.status === 'DRAFT' && !isDriver && (
                       <button
                         className="tl-action-btn tl-btn-dispatch"
                         onClick={() => handleDispatch(trip.id)}
@@ -276,7 +280,7 @@ export default function TripLogs() {
                         <CheckCircle size={13} />
                       </button>
                     )}
-                    {(trip.status === 'DRAFT' || trip.status === 'DISPATCHED') && (
+                    {(trip.status === 'DRAFT' || trip.status === 'DISPATCHED') && !isDriver && (
                       <button
                         className="tl-action-btn tl-btn-cancel"
                         onClick={() => handleCancel(trip.id)}

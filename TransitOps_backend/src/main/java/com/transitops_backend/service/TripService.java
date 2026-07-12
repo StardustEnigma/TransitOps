@@ -18,6 +18,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -30,13 +32,42 @@ public class TripService {
     private final VehicleRepository vehicleRepository;
     private final DriverRepository driverRepository;
 
+    private String getCurrentUserEmail() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null ? auth.getName() : null;
+    }
+
+    private boolean isCurrentUserDriver() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) return false;
+        return auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_DRIVER"));
+    }
+
     public List<TripResponse> getAllTrips() {
+        if (isCurrentUserDriver()) {
+            String email = getCurrentUserEmail();
+            Driver driver = driverRepository.findByEmail(email)
+                    .orElseThrow(() -> new BusinessRuleException("Driver profile not found for email: " + email));
+            return tripRepository.findByDriverId(driver.getId()).stream()
+                    .map(this::toResponse)
+                    .collect(Collectors.toList());
+        }
         return tripRepository.findAll().stream()
                 .map(this::toResponse)
                 .collect(Collectors.toList());
     }
 
     public List<TripResponse> getTripsByStatus(TripStatus status) {
+        if (isCurrentUserDriver()) {
+            String email = getCurrentUserEmail();
+            Driver driver = driverRepository.findByEmail(email)
+                    .orElseThrow(() -> new BusinessRuleException("Driver profile not found for email: " + email));
+            return tripRepository.findByDriverId(driver.getId()).stream()
+                    .filter(t -> t.getStatus() == status)
+                    .map(this::toResponse)
+                    .collect(Collectors.toList());
+        }
         return tripRepository.findByStatus(status).stream()
                 .map(this::toResponse)
                 .collect(Collectors.toList());
@@ -45,6 +76,12 @@ public class TripService {
     public TripResponse getTripById(Long id) {
         Trip trip = tripRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Trip", "id", id));
+        if (isCurrentUserDriver()) {
+            String email = getCurrentUserEmail();
+            if (trip.getDriver() == null || !email.equals(trip.getDriver().getEmail())) {
+                throw new BusinessRuleException("Access denied: You are not assigned to this trip.");
+            }
+        }
         return toResponse(trip);
     }
 
