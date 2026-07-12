@@ -11,6 +11,11 @@ export default function MainLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
+  const isManager = user?.role === 'FLEET_MANAGER';
+  const isSafety = user?.role === 'SAFETY_OFFICER';
+  const isAnalyst = user?.role === 'FINANCIAL_ANALYST';
+  const isDriver = user?.role === 'DRIVER';
+
   const handleLogout = () => {
     logout();
     navigate('/login');
@@ -28,30 +33,40 @@ export default function MainLayout() {
               <span className="logo-subtitle">FLEET CONTROL</span>
             </div>
           </div>
-          <button className="new-dispatch-btn" onClick={() => navigate('/dispatch')}>
-            <Plus size={16} /> NEW DISPATCH
-          </button>
+          {(isManager || isDriver) && (
+            <button className="new-dispatch-btn" onClick={() => navigate('/dispatch')}>
+              <Plus size={16} /> NEW DISPATCH
+            </button>
+          )}
         </div>
 
         <nav className="sidebar-nav">
           <NavLink to="/dashboard" className={({isActive}) => isActive ? "nav-item active" : "nav-item"}>
             <LayoutDashboard size={18} /> DASHBOARD
           </NavLink>
-          <NavLink to="/directory" className={({isActive}) => isActive ? "nav-item active" : "nav-item"}>
-            <Truck size={18} /> FLEET & DRIVERS
-          </NavLink>
-          <NavLink to="/dispatch" className={({isActive}) => isActive ? "nav-item active" : "nav-item"}>
-            <RouteIcon size={18} /> DISPATCH
-          </NavLink>
+          {(isManager || isSafety || isAnalyst) && (
+            <NavLink to="/directory" className={({isActive}) => isActive ? "nav-item active" : "nav-item"}>
+              <Truck size={18} /> FLEET & DRIVERS
+            </NavLink>
+          )}
+          {(isManager || isDriver) && (
+            <NavLink to="/dispatch" className={({isActive}) => isActive ? "nav-item active" : "nav-item"}>
+              <RouteIcon size={18} /> DISPATCH
+            </NavLink>
+          )}
           <NavLink to="/triplogs" className={({isActive}) => isActive ? "nav-item active" : "nav-item"}>
             <History size={18} /> TRIP LOGS
           </NavLink>
-          <NavLink to="/maintenance" className={({isActive}) => isActive ? "nav-item active" : "nav-item"}>
-            <Wrench size={18} /> MAINTENANCE
-          </NavLink>
-          <NavLink to="/reports" className={({isActive}) => isActive ? "nav-item active" : "nav-item"}>
-            <BarChart2 size={18} /> REPORTS
-          </NavLink>
+          {(isManager || isSafety) && (
+            <NavLink to="/maintenance" className={({isActive}) => isActive ? "nav-item active" : "nav-item"}>
+              <Wrench size={18} /> MAINTENANCE
+            </NavLink>
+          )}
+          {(isManager || isAnalyst) && (
+            <NavLink to="/reports" className={({isActive}) => isActive ? "nav-item active" : "nav-item"}>
+              <BarChart2 size={18} /> REPORTS
+            </NavLink>
+          )}
         </nav>
       </aside>
 

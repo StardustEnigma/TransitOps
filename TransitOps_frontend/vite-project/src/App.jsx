@@ -18,15 +18,27 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           
-          {/* Protected routes wrapped in MainLayout */}
           <Route element={<ProtectedRoute />}>
             <Route element={<MainLayout />}>
               <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/directory" element={<Directory />} />
-              <Route path="/dispatch" element={<Dispatch />} />
-              <Route path="/maintenance" element={<Maintenancelog />} />
-              <Route path="/reports" element={<Reports />} />
               <Route path="/triplogs" element={<TripLogs />} />
+
+              {/* Role Restricted Routes */}
+              <Route element={<ProtectedRoute allowedRoles={['FLEET_MANAGER', 'SAFETY_OFFICER', 'FINANCIAL_ANALYST']} />}>
+                <Route path="/directory" element={<Directory />} />
+              </Route>
+
+              <Route element={<ProtectedRoute allowedRoles={['FLEET_MANAGER', 'DRIVER']} />}>
+                <Route path="/dispatch" element={<Dispatch />} />
+              </Route>
+
+              <Route element={<ProtectedRoute allowedRoles={['FLEET_MANAGER', 'SAFETY_OFFICER']} />}>
+                <Route path="/maintenance" element={<Maintenancelog />} />
+              </Route>
+
+              <Route element={<ProtectedRoute allowedRoles={['FLEET_MANAGER', 'FINANCIAL_ANALYST']} />}>
+                <Route path="/reports" element={<Reports />} />
+              </Route>
             </Route>
           </Route>
           

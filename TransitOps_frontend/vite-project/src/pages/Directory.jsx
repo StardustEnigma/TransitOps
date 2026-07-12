@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Car, UserPlus, Users, Filter, User, AlertCircle, AlertTriangle, Loader2, X, Edit2, Trash2 } from 'lucide-react';
 import { vehiclesApi, driversApi } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import './Directory.css';
 
 export default function Directory() {
+  const { user } = useAuth();
+  const isManager = user?.role === 'FLEET_MANAGER';
+  const isSafety = user?.role === 'SAFETY_OFFICER';
+
   const [activeTab, setActiveTab] = useState('drivers'); // 'vehicles' or 'drivers'
   const [drivers, setDrivers] = useState([]);
   const [vehicles, setVehicles] = useState([]);
@@ -188,12 +193,16 @@ export default function Directory() {
           <p>Manage your fleet vehicles and assigned personnel.</p>
         </div>
         <div className="header-actions">
-          <button className="btn btn-outline" onClick={() => { setShowAddVehicle(true); setEditingVehicleId(null); setVehicleForm({ registrationNumber: '', modelName: '', type: 'Cargo Van', maxLoadCapacity: '', odometer: '', acquisitionCost: '' }); setFormError(null); }}>
-            <Car size={16} /> ADD VEHICLE
-          </button>
-          <button className="btn btn-primary" onClick={() => { setShowAddDriver(true); setEditingDriverId(null); setDriverForm({ name: '', email: '', licenseNumber: '', licenseCategory: 'Class A', licenseExpiry: '', contactNumber: '', safetyScore: 90 }); setFormError(null); }}>
-            <UserPlus size={16} /> ADD DRIVER
-          </button>
+          {isManager && (
+            <button className="btn btn-outline" onClick={() => { setShowAddVehicle(true); setEditingVehicleId(null); setVehicleForm({ registrationNumber: '', modelName: '', type: 'Cargo Van', maxLoadCapacity: '', odometer: '', acquisitionCost: '' }); setFormError(null); }}>
+              <Car size={16} /> ADD VEHICLE
+            </button>
+          )}
+          {(isManager || isSafety) && (
+            <button className="btn btn-primary" onClick={() => { setShowAddDriver(true); setEditingDriverId(null); setDriverForm({ name: '', email: '', licenseNumber: '', licenseCategory: 'Class A', licenseExpiry: '', contactNumber: '', safetyScore: 90 }); setFormError(null); }}>
+              <UserPlus size={16} /> ADD DRIVER
+            </button>
+          )}
         </div>
       </div>
 
@@ -251,7 +260,7 @@ export default function Directory() {
                 <th>SAFETY SCORE</th>
                 <th>STATUS</th>
                 <th>LICENSE EXPIRY</th>
-                <th className="text-right">ACTIONS</th>
+                {(isManager || isSafety) && <th className="text-right">ACTIONS</th>}
               </tr>
             </thead>
             <tbody>
@@ -307,21 +316,23 @@ export default function Directory() {
                         )}
                       </div>
                     </td>
-                    <td className="text-right">
-                      <div className="row-actions">
-                        <button className="row-action-btn" title="Edit Driver" onClick={() => openEditDriver(d)}>
-                          <Edit2 size={14} />
-                        </button>
-                        <button
-                          className="row-action-btn row-action-delete"
-                          title="Delete Driver"
-                          onClick={() => setDeleteConfirm({ type: 'driver', id: d.id, name: d.name })}
-                          disabled={d.status === 'ON_TRIP'}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
+                    {(isManager || isSafety) && (
+                      <td className="text-right">
+                        <div className="row-actions">
+                          <button className="row-action-btn" title="Edit Driver" onClick={() => openEditDriver(d)}>
+                            <Edit2 size={14} />
+                          </button>
+                          <button
+                            className="row-action-btn row-action-delete"
+                            title="Delete Driver"
+                            onClick={() => setDeleteConfirm({ type: 'driver', id: d.id, name: d.name })}
+                            disabled={d.status === 'ON_TRIP'}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -338,7 +349,7 @@ export default function Directory() {
                 <th>STATUS</th>
                 <th>ODOMETER</th>
                 <th>COST ($)</th>
-                <th className="text-right">ACTIONS</th>
+                {isManager && <th className="text-right">ACTIONS</th>}
               </tr>
             </thead>
             <tbody>
@@ -366,21 +377,23 @@ export default function Directory() {
                   </td>
                   <td>{v.odometer != null ? `${v.odometer.toLocaleString()} km` : '--'}</td>
                   <td>{v.acquisitionCost != null ? `$${v.acquisitionCost.toLocaleString()}` : '--'}</td>
-                  <td className="text-right">
-                    <div className="row-actions">
-                      <button className="row-action-btn" title="Edit Vehicle" onClick={() => openEditVehicle(v)}>
-                        <Edit2 size={14} />
-                      </button>
-                      <button
-                        className="row-action-btn row-action-delete"
-                        title="Delete Vehicle"
-                        onClick={() => setDeleteConfirm({ type: 'vehicle', id: v.id, name: v.registrationNumber })}
-                        disabled={v.status === 'ON_TRIP'}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </td>
+                  {isManager && (
+                    <td className="text-right">
+                      <div className="row-actions">
+                        <button className="row-action-btn" title="Edit Vehicle" onClick={() => openEditVehicle(v)}>
+                          <Edit2 size={14} />
+                        </button>
+                        <button
+                          className="row-action-btn row-action-delete"
+                          title="Delete Vehicle"
+                          onClick={() => setDeleteConfirm({ type: 'vehicle', id: v.id, name: v.registrationNumber })}
+                          disabled={v.status === 'ON_TRIP'}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
