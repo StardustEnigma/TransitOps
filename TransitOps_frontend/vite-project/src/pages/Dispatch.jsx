@@ -32,6 +32,7 @@ export default function Dispatch() {
   const [formError, setFormError] = useState(null);
   const [showCompleteModal, setShowCompleteModal] = useState(null);
   const [actualDistance, setActualDistance] = useState('');
+  const [mockOffsets, setMockOffsets] = useState({});
 
   // New trip form
   const [tripForm, setTripForm] = useState({
@@ -70,6 +71,26 @@ export default function Dispatch() {
   const availableDrivers = drivers.filter(d => d.status === 'AVAILABLE' && !d.licenseExpired);
   const activeTrips = trips.filter(t => t.status === 'DISPATCHED');
   const draftTrips = trips.filter(t => t.status === 'DRAFT');
+
+  // Mock live location tracking
+  useEffect(() => {
+    if (activeTrips.length === 0) return;
+    const interval = setInterval(() => {
+      setMockOffsets(prev => {
+        const next = { ...prev };
+        activeTrips.forEach(trip => {
+          const cur = next[trip.id] || { latDiff: 0, lngDiff: 0, step: 0 };
+          // Simulate movement in a general direction with some random jitter
+          next[trip.id] = {
+            latDiff: cur.latDiff + (Math.random() * 0.02 - 0.005),
+            lngDiff: cur.lngDiff + (Math.random() * 0.02 - 0.005),
+          };
+        });
+        return next;
+      });
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [activeTrips.length]); // Re-run if active trips count changes
 
   const handleCreateAndDispatch = async (e) => {
     e.preventDefault();
@@ -182,9 +203,10 @@ export default function Dispatch() {
             />
             {/* Show a marker at center for each dispatched trip */}
             {activeTrips.map((trip, idx) => {
-              // Spread markers along a line for visibility
-              const lat = 19.0 + (idx * 1.2);
-              const lng = 72.8 + (idx * 0.5);
+              // Spread markers along a line for visibility, plus add mock live movement
+              const offset = mockOffsets[trip.id] || { latDiff: 0, lngDiff: 0 };
+              const lat = 19.0 + (idx * 1.2) + offset.latDiff;
+              const lng = 72.8 + (idx * 0.5) + offset.lngDiff;
               return (
                 <Marker key={trip.id} position={[lat, lng]}>
                   <Popup>
