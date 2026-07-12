@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import React, { useState, useEffect, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import {
@@ -19,6 +19,74 @@ let DefaultIcon = L.icon({
 });
 L.Marker.prototype.options.icon = DefaultIcon;
 
+const truckIcon = new L.DivIcon({
+  className: 'truck-marker-icon',
+  html: '<div style="background:#1A1A1B; color:white; border-radius:50%; padding:4px; display:flex; align-items:center; justify-content:center; width:28px; height:28px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="13" x="2" y="5" rx="2" ry="2"/><path d="M18 10h4l-2.4 4.5A2 2 0 0 1 17.8 16H18"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg></div>',
+  iconSize: [28, 28],
+  iconAnchor: [14, 14]
+});
+
+const CityAutocomplete = ({ value, onChange, placeholder }) => {
+  const [query, setQuery] = useState(value);
+  const [results, setResults] = useState([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const wrapperRef = useRef(null);
+
+  useEffect(() => { setQuery(value); }, [value]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (query.length < 3 || query === value) {
+      setResults([]);
+      return;
+    }
+    const timeoutId = setTimeout(async () => {
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=IN&featuretype=city`);
+        const data = await res.json();
+        setResults(data.slice(0, 5));
+      } catch (err) {}
+    }, 500);
+    return () => clearTimeout(timeoutId);
+  }, [query, value]);
+
+  return (
+    <div ref={wrapperRef} style={{ position: 'relative', width: '100%' }}>
+      <input
+        type="text"
+        placeholder={placeholder}
+        value={query}
+        onChange={(e) => { setQuery(e.target.value); setShowDropdown(true); }}
+        onFocus={() => { if (results.length > 0) setShowDropdown(true); }}
+        required
+      />
+      {showDropdown && results.length > 0 && (
+        <ul className="autocomplete-dropdown">
+          {results.map((r, i) => (
+            <li key={i} onClick={() => {
+              const shortName = r.display_name.split(',')[0];
+              onChange(shortName);
+              setQuery(shortName);
+              setShowDropdown(false);
+            }}>
+              {r.display_name}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
+
 export default function Dispatch() {
   const mapCenter = [21.1702, 72.8311];
 
@@ -32,7 +100,9 @@ export default function Dispatch() {
   const [formError, setFormError] = useState(null);
   const [showCompleteModal, setShowCompleteModal] = useState(null);
   const [actualDistance, setActualDistance] = useState('');
-  const [mockOffsets, setMockOffsets] = useState({});
+  const [routeCache, setRouteCache] = useState({});
+  const [activeRoutes, setActiveRoutes] = useState({});
+  const [animationStep, setAnimationStep] = useState({});
 
   // New trip form
   const [tripForm, setTripForm] = useState({
@@ -72,25 +142,67 @@ export default function Dispatch() {
   const activeTrips = trips.filter(t => t.status === 'DISPATCHED');
   const draftTrips = trips.filter(t => t.status === 'DRAFT');
 
-  // Mock live location tracking
+  // Fetch actual routes for active trips
   useEffect(() => {
-    if (activeTrips.length === 0) return;
+    const fetchRoutes = async () => {
+      const newRoutes = { ...activeRoutes };
+      let changed = false;
+      for (const trip of activeTrips) {
+        if (newRoutes[trip.id] && newRoutes[trip.id].length > 0) continue;
+        const cacheKey = `${trip.source}-${trip.destination}`;
+        if (routeCache[cacheKey]) {
+          newRoutes[trip.id] = routeCache[cacheKey];
+          changed = true;
+          continue;
+        }
+
+        try {
+          const srcRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(trip.source)}`);
+          const srcData = await srcRes.json();
+          const dstRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(trip.destination)}`);
+          const dstData = await dstRes.json();
+          
+          if (srcData.length > 0 && dstData.length > 0) {
+            const src = srcData[0];
+            const dst = dstData[0];
+            const osrmRes = await fetch(`https://router.project-osrm.org/route/v1/driving/${src.lon},${src.lat};${dst.lon},${dst.lat}?overview=full&geometries=geojson`);
+            const osrmData = await osrmRes.json();
+            if (osrmData.routes && osrmData.routes.length > 0) {
+              const coords = osrmData.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+              newRoutes[trip.id] = coords;
+              setRouteCache(prev => ({ ...prev, [cacheKey]: coords }));
+              changed = true;
+            }
+          }
+        } catch (e) {
+          console.error("Routing error:", e);
+        }
+      }
+      if (changed) setActiveRoutes(newRoutes);
+    };
+    fetchRoutes();
+  }, [activeTrips, activeRoutes, routeCache]);
+
+  // Animate trucks along routes
+  useEffect(() => {
+    const routeKeys = Object.keys(activeRoutes);
+    if (routeKeys.length === 0) return;
     const interval = setInterval(() => {
-      setMockOffsets(prev => {
+      setAnimationStep(prev => {
         const next = { ...prev };
-        activeTrips.forEach(trip => {
-          const cur = next[trip.id] || { latDiff: 0, lngDiff: 0, step: 0 };
-          // Simulate movement in a general direction with some random jitter
-          next[trip.id] = {
-            latDiff: cur.latDiff + (Math.random() * 0.02 - 0.005),
-            lngDiff: cur.lngDiff + (Math.random() * 0.02 - 0.005),
-          };
+        routeKeys.forEach(tripId => {
+          const path = activeRoutes[tripId];
+          if (path && path.length > 0) {
+            const curStep = next[tripId] || 0;
+            // Move forward, resetting to 0 if reaching end
+            next[tripId] = (curStep + 1) % path.length;
+          }
         });
         return next;
       });
-    }, 2000);
+    }, 300); // 300ms per step
     return () => clearInterval(interval);
-  }, [activeTrips.length]); // Re-run if active trips count changes
+  }, [activeRoutes]);
 
   const handleCreateAndDispatch = async (e) => {
     e.preventDefault();
@@ -201,21 +313,28 @@ export default function Dispatch() {
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               attribution='&copy; OpenStreetMap contributors'
             />
-            {/* Show a marker at center for each dispatched trip */}
-            {activeTrips.map((trip, idx) => {
-              // Spread markers along a line for visibility, plus add mock live movement
-              const offset = mockOffsets[trip.id] || { latDiff: 0, lngDiff: 0 };
-              const lat = 19.0 + (idx * 1.2) + offset.latDiff;
-              const lng = 72.8 + (idx * 0.5) + offset.lngDiff;
+            {/* Show routes and animated trucks for active trips */}
+            {activeTrips.map((trip) => {
+              const path = activeRoutes[trip.id];
+              if (!path || path.length === 0) {
+                // Fallback if route not loaded yet
+                return null;
+              }
+              const step = animationStep[trip.id] || 0;
+              const currentPos = path[step];
+
               return (
-                <Marker key={trip.id} position={[lat, lng]}>
-                  <Popup>
-                    <strong>TRP-{trip.id}</strong><br/>
-                    {trip.source} → {trip.destination}<br/>
-                    Driver: {trip.driverName || `#${trip.driverId}`}<br/>
-                    Vehicle: {trip.vehicleRegistration || `#${trip.vehicleId}`}
-                  </Popup>
-                </Marker>
+                <React.Fragment key={trip.id}>
+                  <Polyline positions={path} color="#3B82F6" weight={4} opacity={0.6} />
+                  <Marker position={currentPos} icon={truckIcon}>
+                    <Popup>
+                      <strong>TRP-{trip.id}</strong><br/>
+                      {trip.source} → {trip.destination}<br/>
+                      Driver: {trip.driverName || `#${trip.driverId}`}<br/>
+                      Vehicle: {trip.vehicleRegistration || `#${trip.vehicleId}`}
+                    </Popup>
+                  </Marker>
+                </React.Fragment>
               );
             })}
           </MapContainer>
@@ -315,23 +434,19 @@ export default function Dispatch() {
               <div className="creator-section">
                 <label>Route</label>
                 <div className="input-with-icon">
-                  <MapPin size={14} className="input-icon" />
-                  <input
-                    type="text"
-                    placeholder="Origin (e.g. Mumbai Warehouse)"
+                  <MapPin size={14} className="input-icon" style={{ zIndex: 2 }} />
+                  <CityAutocomplete
+                    placeholder="Origin (e.g. Mumbai)"
                     value={tripForm.source}
-                    onChange={(e) => setTripForm({...tripForm, source: e.target.value})}
-                    required
+                    onChange={(val) => setTripForm({...tripForm, source: val})}
                   />
                 </div>
                 <div className="input-with-icon">
-                  <MapPin size={14} className="input-icon" />
-                  <input
-                    type="text"
-                    placeholder="Destination (e.g. Ahmedabad Hub)"
+                  <MapPin size={14} className="input-icon" style={{ zIndex: 2 }} />
+                  <CityAutocomplete
+                    placeholder="Destination (e.g. Pune)"
                     value={tripForm.destination}
-                    onChange={(e) => setTripForm({...tripForm, destination: e.target.value})}
-                    required
+                    onChange={(val) => setTripForm({...tripForm, destination: val})}
                   />
                 </div>
               </div>

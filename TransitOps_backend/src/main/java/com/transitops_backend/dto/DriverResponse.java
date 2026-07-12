@@ -21,6 +21,7 @@ public class DriverResponse {
     private String licenseCategory;
     private LocalDate licenseExpiry;
     private String contactNumber;
+    private String email;
     private Integer safetyScore;
     private DriverStatus status;
     private boolean licenseExpired;

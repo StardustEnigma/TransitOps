@@ -5,6 +5,8 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.Pattern;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -42,8 +44,15 @@ public class Driver {
     @Column(name = "license_expiry")
     private LocalDate licenseExpiry;
 
+    @NotBlank(message = "Contact number is required")
+    @Pattern(regexp = "^\\+?[0-9]{10,15}$", message = "Invalid contact number format")
     @Column(name = "contact_number", length = 20)
     private String contactNumber;
+
+    @NotBlank(message = "Email is required")
+    @Email(message = "Invalid email format")
+    @Column(name = "email", length = 100)
+    private String email;
 
     @Builder.Default
     @Min(0)

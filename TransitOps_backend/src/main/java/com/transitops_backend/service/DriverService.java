@@ -50,6 +50,7 @@ public class DriverService {
                 .licenseCategory(request.getLicenseCategory())
                 .licenseExpiry(request.getLicenseExpiry())
                 .contactNumber(request.getContactNumber())
+                .email(request.getEmail())
                 .safetyScore(request.getSafetyScore() != null ? request.getSafetyScore() : 100)
                 .status(DriverStatus.AVAILABLE)
                 .build();
@@ -79,6 +80,9 @@ public class DriverService {
         if (request.getContactNumber() != null) {
             driver.setContactNumber(request.getContactNumber());
         }
+        if (request.getEmail() != null) {
+            driver.setEmail(request.getEmail());
+        }
         if (request.getSafetyScore() != null) {
             driver.setSafetyScore(request.getSafetyScore());
         }
@@ -107,6 +111,7 @@ public class DriverService {
                 .licenseCategory(driver.getLicenseCategory())
                 .licenseExpiry(driver.getLicenseExpiry())
                 .contactNumber(driver.getContactNumber())
+                .email(driver.getEmail())
                 .safetyScore(driver.getSafetyScore())
                 .status(driver.getStatus())
                 .licenseExpired(driver.isLicenseExpired())

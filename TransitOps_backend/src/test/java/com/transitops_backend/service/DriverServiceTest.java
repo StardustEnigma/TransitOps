@@ -53,7 +53,8 @@ public class DriverServiceTest {
                 "DL-99887766",
                 "Class A",
                 LocalDate.now().plusYears(2),
-                "+15550199",
+                "+15550199000",
+                "john@transitops.com",
                 95
         );
     }
