@@ -40,6 +40,12 @@ export default function MainLayout() {
           <NavLink to="/directory" className={({isActive}) => isActive ? "nav-item active" : "nav-item"}>
             <Truck size={18} /> FLEET & DRIVERS
           </NavLink>
+          <NavLink to="/dispatch" className={({isActive}) => isActive ? "nav-item active" : "nav-item"}>
+            <RouteIcon size={18} /> DISPATCH
+          </NavLink>
+          <NavLink to="/triplogs" className={({isActive}) => isActive ? "nav-item active" : "nav-item"}>
+            <History size={18} /> TRIP LOGS
+          </NavLink>
           <NavLink to="/maintenance" className={({isActive}) => isActive ? "nav-item active" : "nav-item"}>
             <Wrench size={18} /> MAINTENANCE
           </NavLink>
@@ -47,15 +53,6 @@ export default function MainLayout() {
             <BarChart2 size={18} /> REPORTS
           </NavLink>
         </nav>
-
-        <div className="sidebar-footer">
-          <a href="#" className="nav-item">
-            <Settings size={18} /> SETTINGS
-          </a>
-          <button className="nav-item" onClick={handleLogout} style={{ border: 'none', background: 'none', cursor: 'pointer', width: '100%' }}>
-            <LogOut size={18} /> SIGN OUT
-          </button>
-        </div>
       </aside>
 
       {/* Main Content Area */}
@@ -69,6 +66,8 @@ export default function MainLayout() {
           <div className="topbar-actions">
             <button className="icon-btn"><Bell size={18} /></button>
             <button className="icon-btn"><HelpCircle size={18} /></button>
+            <button className="icon-btn"><Settings size={18} /></button>
+            <button className="icon-btn" onClick={handleLogout} title="Sign Out"><LogOut size={18} /></button>
             <div className="user-profile">
               <div className="avatar">
                 <img src="https://i.pravatar.cc/150?u=a042581f4e29026704d" alt="User" />

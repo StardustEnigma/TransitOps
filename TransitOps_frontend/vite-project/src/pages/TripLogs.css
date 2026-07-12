@@ -1,0 +1,282 @@
+.triplogs-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.triplogs-page h1 {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+  letter-spacing: -0.01em;
+  color: var(--text-main);
+}
+
+.triplogs-page p {
+  color: var(--text-muted);
+  font-size: 14px;
+  margin: 0;
+}
+
+.trip-header-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.trip-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.status-in-progress {
+  background-color: #E2E8F0;
+  color: #1E40AF;
+}
+
+.status-in-progress .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #1E40AF;
+}
+
+.btn-blue {
+  background-color: #1E40AF;
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.triplogs-grid {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.map-section {
+  flex: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.map-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.map-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.map-eta {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.map-container {
+  height: 400px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  position: relative;
+  z-index: 1; /* prevents leaflet map from covering dropdowns if any */
+}
+
+.log-expense-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+}
+
+.log-expense-card h3 {
+  font-size: 16px;
+  margin: 0 0 16px 0;
+}
+
+.expense-form {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.form-group label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.form-group select, .form-group input {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text-main);
+  background-color: var(--white);
+}
+
+.sidebar-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.profitability-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+}
+
+.profitability-card .card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  margin: 0 0 24px 0;
+}
+
+.prof-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.prof-label {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.prof-value {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.prof-value.revenue { color: var(--text-main); }
+.prof-value.expense { color: #DC2626; }
+
+.profitability-card hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 16px 0;
+}
+
+.prof-label-large {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.prof-value-large {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.prof-margin {
+  font-size: 10px;
+  font-weight: 700;
+  color: #10B981;
+  text-align: right;
+  letter-spacing: 0.05em;
+}
+
+.recent-logs-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.logs-header {
+  background: #F9F9FA;
+  padding: 16px 24px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.logs-list {
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  gap: 12px;
+}
+
+.log-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--border);
+  padding: 12px;
+  border-radius: var(--radius);
+}
+
+.log-icon-wrapper {
+  background: var(--bg);
+  padding: 8px;
+  border-radius: 6px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.log-details {
+  flex: 1;
+}
+
+.log-type {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 4px;
+}
+
+.log-date {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.log-amount {
+  font-size: 13px;
+  font-weight: 700;
+  color: #DC2626;
+}
