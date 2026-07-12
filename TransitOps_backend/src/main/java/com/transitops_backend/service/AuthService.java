@@ -16,6 +16,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Set;
+
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -25,8 +27,26 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
+    // Roles a caller may grant themselves via the public registration endpoint.
+    // Privileged roles (FLEET_MANAGER, SAFETY_OFFICER, FINANCIAL_ANALYST) must be
+    // provisioned by an existing fleet manager via registerStaff().
+    private static final Set<String> SELF_REGISTERABLE_ROLES = Set.of("DRIVER");
+
     @Transactional
     public AuthResponse register(RegisterRequest request) {
+        if (!SELF_REGISTERABLE_ROLES.contains(request.getRoleName())) {
+            throw new BusinessRuleException(
+                    "Role '" + request.getRoleName() + "' cannot be self-registered. Ask a fleet manager to create this account.");
+        }
+        return doRegister(request);
+    }
+
+    @Transactional
+    public AuthResponse registerStaff(RegisterRequest request) {
+        return doRegister(request);
+    }
+
+    private AuthResponse doRegister(RegisterRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new BusinessRuleException("Email already registered: " + request.getEmail());
         }

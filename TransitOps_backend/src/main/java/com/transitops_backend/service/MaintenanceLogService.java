@@ -52,6 +52,10 @@ public class MaintenanceLogService {
             throw new BusinessRuleException("Cannot create maintenance for a vehicle currently on a trip");
         }
 
+        if (!maintenanceLogRepository.findByVehicleIdAndStatus(vehicle.getId(), MaintenanceStatus.OPEN).isEmpty()) {
+            throw new BusinessRuleException("Vehicle already has an open maintenance log");
+        }
+
         // Set vehicle to IN_SHOP
         vehicle.setStatus(VehicleStatus.IN_SHOP);
         vehicleRepository.save(vehicle);
@@ -80,15 +84,16 @@ public class MaintenanceLogService {
 
         log.setStatus(MaintenanceStatus.COMPLETED);
         log.setCompletedAt(LocalDateTime.now());
+        log = maintenanceLogRepository.save(log);
 
-        // Restore vehicle to AVAILABLE unless RETIRED
+        // Restore vehicle to AVAILABLE unless RETIRED or another maintenance log is still OPEN
         Vehicle vehicle = log.getVehicle();
-        if (vehicle.getStatus() != VehicleStatus.RETIRED) {
+        boolean hasOtherOpenLogs = !maintenanceLogRepository
+                .findByVehicleIdAndStatus(vehicle.getId(), MaintenanceStatus.OPEN).isEmpty();
+        if (vehicle.getStatus() != VehicleStatus.RETIRED && !hasOtherOpenLogs) {
             vehicle.setStatus(VehicleStatus.AVAILABLE);
             vehicleRepository.save(vehicle);
         }
-
-        log = maintenanceLogRepository.save(log);
         return toResponse(log);
     }
 

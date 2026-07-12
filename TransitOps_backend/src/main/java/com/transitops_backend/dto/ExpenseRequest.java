@@ -22,6 +22,7 @@ public class ExpenseRequest {
     @NotNull(message = "Expense type is required")
     private String expenseType;
 
+    @NotNull(message = "Amount is required")
     @Positive(message = "Amount must be positive")
     private BigDecimal amount;
 

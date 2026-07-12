@@ -44,6 +44,7 @@ public class AuthServiceTest {
     private AuthService authService;
 
     private Role fleetManagerRole;
+    private Role driverRole;
     private User testUser;
 
     @BeforeEach
@@ -52,6 +53,12 @@ public class AuthServiceTest {
                 .id(1L)
                 .name("FLEET_MANAGER")
                 .description("Fleet Manager Description")
+                .build();
+
+        driverRole = Role.builder()
+                .id(2L)
+                .name("DRIVER")
+                .description("Driver Description")
                 .build();
 
         testUser = User.builder()
@@ -66,28 +73,44 @@ public class AuthServiceTest {
 
     @Test
     void register_Success() {
-        RegisterRequest request = new RegisterRequest("Alice", "alice@test.com", "password", "FLEET_MANAGER");
+        RegisterRequest request = new RegisterRequest("Alice", "alice@test.com", "password", "DRIVER");
+        User driverUser = User.builder()
+                .id(1L)
+                .name("Alice")
+                .email("alice@test.com")
+                .passwordHash("hashed_password")
+                .role(driverRole)
+                .isActive(true)
+                .build();
 
         when(userRepository.existsByEmail("alice@test.com")).thenReturn(false);
-        when(roleRepository.findByName("FLEET_MANAGER")).thenReturn(Optional.of(fleetManagerRole));
+        when(roleRepository.findByName("DRIVER")).thenReturn(Optional.of(driverRole));
         when(passwordEncoder.encode("password")).thenReturn("hashed_password");
-        when(userRepository.save(any(User.class))).thenReturn(testUser);
-        when(jwtService.generateToken("alice@test.com", "FLEET_MANAGER")).thenReturn("test_token");
+        when(userRepository.save(any(User.class))).thenReturn(driverUser);
+        when(jwtService.generateToken("alice@test.com", "DRIVER")).thenReturn("test_token");
 
         AuthResponse response = authService.register(request);
 
         assertNotNull(response);
         assertEquals("test_token", response.getToken());
         assertEquals("alice@test.com", response.getEmail());
-        assertEquals("FLEET_MANAGER", response.getRole());
+        assertEquals("DRIVER", response.getRole());
         assertEquals("Alice", response.getName());
 
         verify(userRepository).save(any(User.class));
     }
 
     @Test
-    void register_ThrowsException_WhenEmailExists() {
+    void register_ThrowsException_WhenRoleNotSelfRegisterable() {
         RegisterRequest request = new RegisterRequest("Alice", "alice@test.com", "password", "FLEET_MANAGER");
+
+        assertThrows(BusinessRuleException.class, () -> authService.register(request));
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void register_ThrowsException_WhenEmailExists() {
+        RegisterRequest request = new RegisterRequest("Alice", "alice@test.com", "password", "DRIVER");
 
         when(userRepository.existsByEmail("alice@test.com")).thenReturn(true);
 
@@ -97,12 +120,29 @@ public class AuthServiceTest {
 
     @Test
     void register_ThrowsException_WhenRoleNotFound() {
-        RegisterRequest request = new RegisterRequest("Alice", "alice@test.com", "password", "INVALID_ROLE");
+        RegisterRequest request = new RegisterRequest("Alice", "alice@test.com", "password", "DRIVER");
 
         when(userRepository.existsByEmail("alice@test.com")).thenReturn(false);
-        when(roleRepository.findByName("INVALID_ROLE")).thenReturn(Optional.empty());
+        when(roleRepository.findByName("DRIVER")).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class, () -> authService.register(request));
+    }
+
+    @Test
+    void registerStaff_Success_BypassesSelfRegisterRestriction() {
+        RegisterRequest request = new RegisterRequest("Alice", "alice@test.com", "password", "FLEET_MANAGER");
+
+        when(userRepository.existsByEmail("alice@test.com")).thenReturn(false);
+        when(roleRepository.findByName("FLEET_MANAGER")).thenReturn(Optional.of(fleetManagerRole));
+        when(passwordEncoder.encode("password")).thenReturn("hashed_password");
+        when(userRepository.save(any(User.class))).thenReturn(testUser);
+        when(jwtService.generateToken("alice@test.com", "FLEET_MANAGER")).thenReturn("test_token");
+
+        AuthResponse response = authService.registerStaff(request);
+
+        assertNotNull(response);
+        assertEquals("FLEET_MANAGER", response.getRole());
+        verify(userRepository).save(any(User.class));
     }
 
     @Test

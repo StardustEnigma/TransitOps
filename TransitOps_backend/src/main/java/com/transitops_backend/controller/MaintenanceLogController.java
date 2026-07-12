@@ -20,6 +20,7 @@ public class MaintenanceLogController {
     private final MaintenanceLogService maintenanceLogService;
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('FLEET_MANAGER', 'FINANCIAL_ANALYST')")
     public ResponseEntity<List<MaintenanceResponse>> getAll(
             @RequestParam(required = false) Long vehicleId) {
         List<MaintenanceResponse> logs = (vehicleId != null)
@@ -29,6 +30,7 @@ public class MaintenanceLogController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('FLEET_MANAGER', 'FINANCIAL_ANALYST')")
     public ResponseEntity<MaintenanceResponse> getById(@PathVariable Long id) {
         return ResponseEntity.ok(maintenanceLogService.getById(id));
     }

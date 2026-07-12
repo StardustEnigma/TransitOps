@@ -70,9 +70,15 @@ public class DriverService {
 
         driver.setName(request.getName());
         driver.setLicenseNumber(request.getLicenseNumber());
-        driver.setLicenseCategory(request.getLicenseCategory());
-        driver.setLicenseExpiry(request.getLicenseExpiry());
-        driver.setContactNumber(request.getContactNumber());
+        if (request.getLicenseCategory() != null) {
+            driver.setLicenseCategory(request.getLicenseCategory());
+        }
+        if (request.getLicenseExpiry() != null) {
+            driver.setLicenseExpiry(request.getLicenseExpiry());
+        }
+        if (request.getContactNumber() != null) {
+            driver.setContactNumber(request.getContactNumber());
+        }
         if (request.getSafetyScore() != null) {
             driver.setSafetyScore(request.getSafetyScore());
         }

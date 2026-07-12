@@ -13,4 +13,6 @@ public interface MaintenanceLogRepository extends JpaRepository<MaintenanceLog, 
     List<MaintenanceLog> findByVehicleId(Long vehicleId);
 
     List<MaintenanceLog> findByStatus(MaintenanceStatus status);
+
+    List<MaintenanceLog> findByVehicleIdAndStatus(Long vehicleId, MaintenanceStatus status);
 }

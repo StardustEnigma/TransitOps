@@ -20,6 +20,7 @@ public class FuelLogRequest {
 
     private Long tripId;
 
+    @NotNull(message = "Liters is required")
     @Positive(message = "Liters must be positive")
     private BigDecimal liters;
 

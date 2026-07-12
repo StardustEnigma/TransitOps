@@ -18,6 +18,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -61,6 +63,7 @@ public class MaintenanceLogServiceTest {
         MaintenanceRequest request = new MaintenanceRequest(1L, "Oil Change", "Engine check", LocalDate.now(), BigDecimal.valueOf(100));
 
         when(vehicleRepository.findById(1L)).thenReturn(Optional.of(testVehicle));
+        when(maintenanceLogRepository.findByVehicleIdAndStatus(1L, MaintenanceStatus.OPEN)).thenReturn(Collections.emptyList());
         when(maintenanceLogRepository.save(any(MaintenanceLog.class))).thenReturn(testLog);
 
         MaintenanceResponse response = maintenanceLogService.createMaintenanceLog(request);
@@ -85,10 +88,23 @@ public class MaintenanceLogServiceTest {
     }
 
     @Test
+    void createMaintenanceLog_ThrowsException_WhenAnotherLogAlreadyOpen() {
+        testVehicle.setStatus(VehicleStatus.IN_SHOP);
+        MaintenanceRequest request = new MaintenanceRequest(1L, "Brake Check", "Brake pads", LocalDate.now(), BigDecimal.valueOf(50));
+
+        when(vehicleRepository.findById(1L)).thenReturn(Optional.of(testVehicle));
+        when(maintenanceLogRepository.findByVehicleIdAndStatus(1L, MaintenanceStatus.OPEN)).thenReturn(List.of(testLog));
+
+        assertThrows(BusinessRuleException.class, () -> maintenanceLogService.createMaintenanceLog(request));
+        verify(maintenanceLogRepository, never()).save(any(MaintenanceLog.class));
+    }
+
+    @Test
     void closeMaintenanceLog_Success() {
         testVehicle.setStatus(VehicleStatus.IN_SHOP);
         when(maintenanceLogRepository.findById(1L)).thenReturn(Optional.of(testLog));
         when(maintenanceLogRepository.save(any(MaintenanceLog.class))).thenReturn(testLog);
+        when(maintenanceLogRepository.findByVehicleIdAndStatus(1L, MaintenanceStatus.OPEN)).thenReturn(Collections.emptyList());
 
         MaintenanceResponse response = maintenanceLogService.closeMaintenanceLog(1L);
 
@@ -98,5 +114,28 @@ public class MaintenanceLogServiceTest {
 
         verify(vehicleRepository).save(testVehicle);
         verify(maintenanceLogRepository).save(testLog);
+    }
+
+    @Test
+    void closeMaintenanceLog_DoesNotFreeVehicle_WhenOtherLogsStillOpen() {
+        testVehicle.setStatus(VehicleStatus.IN_SHOP);
+        MaintenanceLog otherOpenLog = MaintenanceLog.builder()
+                .id(2L)
+                .vehicle(testVehicle)
+                .title("Tire Replacement")
+                .status(MaintenanceStatus.OPEN)
+                .build();
+
+        when(maintenanceLogRepository.findById(1L)).thenReturn(Optional.of(testLog));
+        when(maintenanceLogRepository.save(any(MaintenanceLog.class))).thenReturn(testLog);
+        when(maintenanceLogRepository.findByVehicleIdAndStatus(1L, MaintenanceStatus.OPEN)).thenReturn(List.of(otherOpenLog));
+
+        MaintenanceResponse response = maintenanceLogService.closeMaintenanceLog(1L);
+
+        assertNotNull(response);
+        assertEquals(MaintenanceStatus.COMPLETED, response.getStatus());
+        assertEquals(VehicleStatus.IN_SHOP, testVehicle.getStatus());
+
+        verify(vehicleRepository, never()).save(any(Vehicle.class));
     }
 }

@@ -97,11 +97,6 @@ public class TripService {
             throw new BusinessRuleException("Driver's license has expired on: " + driver.getLicenseExpiry());
         }
 
-        // Business rule: driver must not be suspended
-        if (driver.getStatus() == DriverStatus.SUSPENDED) {
-            throw new BusinessRuleException("Driver is suspended and cannot be dispatched");
-        }
-
         // Business rule: cargo weight must not exceed vehicle capacity
         if (trip.getCargoWeight() != null && vehicle.getMaxLoadCapacity() != null
                 && trip.getCargoWeight().compareTo(vehicle.getMaxLoadCapacity()) > 0) {
