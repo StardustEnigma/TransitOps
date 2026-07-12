@@ -10,14 +10,14 @@ RUN mvn clean package -DskipTests
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 
-# Install PostgreSQL and bash
-RUN apk add --no-cache postgresql postgresql-contrib postgresql-client bash
+# Install PostgreSQL, bash, and dos2unix
+RUN apk add --no-cache postgresql postgresql-contrib postgresql-client bash dos2unix
 
 COPY --from=build /app/target/*.jar app.jar
 COPY entrypoint.sh .
-RUN chmod +x entrypoint.sh
+RUN dos2unix entrypoint.sh && chmod +x entrypoint.sh
 
-EXPOSE 8080 5432
+EXPOSE 8080
 
 ENTRYPOINT ["./entrypoint.sh"]
 
