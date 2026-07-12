@@ -4,6 +4,8 @@ import Login from './pages/Login';
 import MainLayout from './layouts/MainLayout';
 import Directory from './pages/Directory';
 import Dashboard from './pages/Dashboard';
+import Maintenancelog from './pages/Maintenancelog';
+import Reports from './pages/Reports';
 
 function App() {
   return (
@@ -15,12 +17,15 @@ function App() {
         <Route element={<MainLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/directory" element={<Directory />} />
+          <Route path="/maintenance" element={<Maintenancelog />} />
+          <Route path="/reports" element={<Reports />} />
         </Route>
         
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        <Route path="*" element={<Navigate to="/maintenance" replace />} />
       </Routes>
     </Router>
   );
 }
 
 export default App;
+

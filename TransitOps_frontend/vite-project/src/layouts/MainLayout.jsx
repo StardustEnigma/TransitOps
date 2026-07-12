@@ -2,7 +2,7 @@ import React from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
 import { 
   Truck, LayoutDashboard, Route as RouteIcon, History, Settings, HelpCircle, 
-  Search, Bell, Plus
+  Search, Bell, Plus, Wrench, BarChart2
 } from 'lucide-react';
 import './MainLayout.css';
 
@@ -36,6 +36,12 @@ export default function MainLayout() {
           </NavLink>
           <NavLink to="/triplogs" className={({isActive}) => isActive ? "nav-item active" : "nav-item"}>
             <History size={18} /> TRIP LOGS
+          </NavLink>
+          <NavLink to="/maintenance" className={({isActive}) => isActive ? "nav-item active" : "nav-item"}>
+            <Wrench size={18} /> MAINTENANCE
+          </NavLink>
+          <NavLink to="/reports" className={({isActive}) => isActive ? "nav-item active" : "nav-item"}>
+            <BarChart2 size={18} /> REPORTS
           </NavLink>
         </nav>
 
